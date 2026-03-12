@@ -182,7 +182,7 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
               <Upload className="mb-2 h-8 w-8 text-muted-foreground" />
               <p className="text-sm font-medium">Drop a file here or click to browse</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                PDF, DOCX, TXT, MD, CSV, XLSX, PPTX (max 50MB)
+                PDF, DOCX, TXT, MD, CSV, XLSX, PPTX, PNG, JPG, GIF, WEBP (max 50MB)
               </p>
             </div>
             <input

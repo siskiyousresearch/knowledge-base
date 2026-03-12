@@ -4,6 +4,9 @@ import { parseXlsx } from "./parsers/xlsx";
 import { parseCsv } from "./parsers/csv";
 import { parsePptx } from "./parsers/pptx";
 import { parseMarkdown } from "./parsers/markdown";
+import { parseImage } from "./parsers/image";
+
+const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".tif", ".svg"];
 
 const PARSER_MAP: Record<string, (buffer: Buffer) => Promise<{ text: string; metadata: Record<string, unknown> }>> = {
   ".pdf": parsePdf,
@@ -20,7 +23,13 @@ export async function parseDocument(
   buffer: Buffer,
   extension: string
 ): Promise<{ text: string; metadata: Record<string, unknown> }> {
-  const parser = PARSER_MAP[extension.toLowerCase()];
+  const ext = extension.toLowerCase();
+
+  if (IMAGE_EXTENSIONS.includes(ext)) {
+    return parseImage(buffer, ext);
+  }
+
+  const parser = PARSER_MAP[ext];
   if (!parser) {
     throw new Error(`Unsupported file type: ${extension}`);
   }
@@ -28,5 +37,6 @@ export async function parseDocument(
 }
 
 export function isSupportedExtension(extension: string): boolean {
-  return extension.toLowerCase() in PARSER_MAP;
+  const ext = extension.toLowerCase();
+  return ext in PARSER_MAP || IMAGE_EXTENSIONS.includes(ext);
 }

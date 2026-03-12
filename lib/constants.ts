@@ -17,6 +17,13 @@ export const SUPPORTED_FILE_TYPES: Record<string, string[]> = {
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
   "application/vnd.ms-excel": [".xls"],
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": [".pptx"],
+  "image/png": [".png"],
+  "image/jpeg": [".jpg", ".jpeg"],
+  "image/gif": [".gif"],
+  "image/webp": [".webp"],
+  "image/bmp": [".bmp"],
+  "image/tiff": [".tiff", ".tif"],
+  "image/svg+xml": [".svg"],
 };
 
 export const ALL_EXTENSIONS = Object.values(SUPPORTED_FILE_TYPES).flat();
