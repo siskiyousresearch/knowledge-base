@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getFileExtension } from "@/lib/utils";
 import { isSupportedExtension } from "@/lib/documents";
 import { MAX_FILE_SIZE } from "@/lib/constants";
 
@@ -25,41 +24,31 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    let formData: FormData;
-    try {
-      formData = await request.formData();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return NextResponse.json({ error: `FormData parse error: ${msg}` }, { status: 400 });
+    const { fileName, fileType, fileSize } = await request.json();
+
+    if (!fileName || !fileType) {
+      return NextResponse.json({ error: "fileName and fileType are required" }, { status: 400 });
     }
 
-    const file = formData.get("file") as File | null;
-
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
+    if (fileSize > MAX_FILE_SIZE) {
       return NextResponse.json({ error: "File exceeds 50MB limit" }, { status: 400 });
     }
 
-    const extension = getFileExtension(file.name);
-    if (!isSupportedExtension(extension)) {
-      return NextResponse.json({ error: `Unsupported file type: ${extension}` }, { status: 400 });
+    if (!isSupportedExtension(fileType)) {
+      return NextResponse.json({ error: `Unsupported file type: ${fileType}` }, { status: 400 });
     }
 
     const supabase = createAdminClient();
 
-    // Insert document record
     const { data, error } = await supabase
       .from("knowledge_documents")
       .insert({
-        title: file.name.replace(/\.[^.]+$/, ""),
+        title: fileName.replace(/\.[^.]+$/, ""),
         source: "upload",
         status: "pending",
-        file_name: file.name,
-        file_type: extension,
-        file_size: file.size,
+        file_name: fileName,
+        file_type: fileType,
+        file_size: fileSize,
       })
       .select()
       .single();
@@ -68,32 +57,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `DB insert error: ${error.message}` }, { status: 500 });
     }
 
-    // Upload file to Supabase Storage
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const storagePath = `uploads/${data.id}/${file.name}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("documents")
-      .upload(storagePath, buffer, {
-        contentType: file.type || "application/octet-stream",
-        upsert: true,
-      });
-
-    if (uploadError) {
-      // Clean up the document record
-      await supabase.from("knowledge_documents").delete().eq("id", data.id);
-      return NextResponse.json({ error: `Storage upload error: ${uploadError.message}` }, { status: 500 });
-    }
-
-    // Store the storage path in metadata
-    await supabase
-      .from("knowledge_documents")
-      .update({ metadata: { storagePath } })
-      .eq("id", data.id);
-
     return NextResponse.json(data, { status: 201 });
   } catch (err) {
-    const message = err instanceof Error ? `${err.message}` : String(err);
+    const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: `POST /api/documents failed: ${message}` }, { status: 500 });
   }
 }

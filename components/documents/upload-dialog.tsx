@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ALL_EXTENSIONS } from "@/lib/constants";
 import { Upload, Globe, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createBrowserClient } from "@supabase/ssr";
 
 type Tab = "file" | "url";
 type UploadState = "idle" | "uploading" | "processing" | "done" | "error";
@@ -15,6 +16,18 @@ interface UploadDialogProps {
   open: boolean;
   onClose: () => void;
   onComplete: () => void;
+}
+
+function getSupabase() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
+
+function getFileExtension(name: string): string {
+  const match = name.match(/\.[^.]+$/);
+  return match ? match[0].toLowerCase() : "";
 }
 
 export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
@@ -42,17 +55,22 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
     setError("");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      const extension = getFileExtension(file.name);
 
-      const uploadRes = await fetch("/api/documents", {
+      // Step 1: Create document record via lightweight API call (no file body)
+      const createRes = await fetch("/api/documents", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: extension,
+          fileSize: file.size,
+        }),
       });
 
-      if (!uploadRes.ok) {
-        const text = await uploadRes.text();
-        let errorMsg = `Upload failed (${uploadRes.status})`;
+      if (!createRes.ok) {
+        const text = await createRes.text();
+        let errorMsg = `Upload failed (${createRes.status})`;
         try {
           const data = JSON.parse(text);
           errorMsg = data.error || errorMsg;
@@ -62,14 +80,30 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
         throw new Error(errorMsg);
       }
 
-      const doc = await uploadRes.json();
+      const doc = await createRes.json();
 
+      // Step 2: Upload file directly to Supabase Storage from browser
+      const supabase = getSupabase();
+      const storagePath = `uploads/${doc.id}/${file.name}`;
+
+      const { error: storageError } = await supabase.storage
+        .from("documents")
+        .upload(storagePath, file, {
+          contentType: file.type || "application/octet-stream",
+          upsert: true,
+        });
+
+      if (storageError) {
+        throw new Error(`Storage upload error: ${storageError.message}`);
+      }
+
+      // Step 3: Trigger processing
       setState("processing");
 
       const processRes = await fetch("/api/documents/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documentId: doc.id }),
+        body: JSON.stringify({ documentId: doc.id, storagePath }),
       });
 
       if (!processRes.ok) {
