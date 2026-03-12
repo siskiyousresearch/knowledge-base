@@ -48,14 +48,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Unsupported file type: ${extension}` }, { status: 400 });
     }
 
-    let supabase;
-    try {
-      supabase = createAdminClient();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return NextResponse.json({ error: `Supabase client error: ${msg}` }, { status: 500 });
-    }
+    const supabase = createAdminClient();
 
+    // Insert document record
     const { data, error } = await supabase
       .from("knowledge_documents")
       .insert({
@@ -73,27 +68,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `DB insert error: ${error.message}` }, { status: 500 });
     }
 
-    // Store file content as base64 in metadata for processing
-    let buffer: Buffer;
-    try {
-      buffer = Buffer.from(await file.arrayBuffer());
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return NextResponse.json({ error: `File read error: ${msg}` }, { status: 500 });
+    // Upload file to Supabase Storage
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const storagePath = `uploads/${data.id}/${file.name}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("documents")
+      .upload(storagePath, buffer, {
+        contentType: file.type || "application/octet-stream",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      // Clean up the document record
+      await supabase.from("knowledge_documents").delete().eq("id", data.id);
+      return NextResponse.json({ error: `Storage upload error: ${uploadError.message}` }, { status: 500 });
     }
 
-    const { error: updateError } = await supabase
+    // Store the storage path in metadata
+    await supabase
       .from("knowledge_documents")
-      .update({ metadata: { fileContent: buffer.toString("base64") } })
+      .update({ metadata: { storagePath } })
       .eq("id", data.id);
-
-    if (updateError) {
-      return NextResponse.json({ error: `DB update (base64) error: ${updateError.message}` }, { status: 500 });
-    }
 
     return NextResponse.json(data, { status: 201 });
   } catch (err) {
-    const message = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+    const message = err instanceof Error ? `${err.message}` : String(err);
     return NextResponse.json({ error: `POST /api/documents failed: ${message}` }, { status: 500 });
   }
 }

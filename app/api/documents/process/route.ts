@@ -11,13 +11,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "documentId required" }, { status: 400 });
   }
 
-  let supabase;
-  try {
-    supabase = createAdminClient();
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: `Supabase client error: ${msg}` }, { status: 500 });
-  }
+  const supabase = createAdminClient();
 
   // Fetch document
   const { data: doc, error: fetchError } = await supabase
@@ -37,13 +31,21 @@ export async function POST(request: NextRequest) {
     .eq("id", documentId);
 
   try {
-    // Get file content from metadata
-    const fileContent = doc.metadata?.fileContent as string | undefined;
-    if (!fileContent) {
-      throw new Error("File content not found in document metadata");
+    // Download file from Supabase Storage
+    const storagePath = doc.metadata?.storagePath as string | undefined;
+    if (!storagePath) {
+      throw new Error("Storage path not found in document metadata");
     }
 
-    const buffer = Buffer.from(fileContent, "base64");
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from("documents")
+      .download(storagePath);
+
+    if (downloadError || !fileData) {
+      throw new Error(`Storage download error: ${downloadError?.message || "no data"}`);
+    }
+
+    const buffer = Buffer.from(await fileData.arrayBuffer());
     const extension = doc.file_type || "";
 
     // Parse document
@@ -59,29 +61,24 @@ export async function POST(request: NextRequest) {
     // Generate embeddings and insert chunks
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
-      try {
-        const embedding = await generateEmbedding(chunk.content);
-        const tokenCount = estimateTokenCount(chunk.content);
+      const embedding = await generateEmbedding(chunk.content);
+      const tokenCount = estimateTokenCount(chunk.content);
 
-        const { error: insertError } = await supabase.from("knowledge_document_chunks").insert({
-          document_id: documentId,
-          chunk_index: chunk.index,
-          content: chunk.content,
-          token_count: tokenCount,
-          embedding: JSON.stringify(embedding),
-          metadata: chunk.metadata,
-        });
+      const { error: insertError } = await supabase.from("knowledge_document_chunks").insert({
+        document_id: documentId,
+        chunk_index: chunk.index,
+        content: chunk.content,
+        token_count: tokenCount,
+        embedding: JSON.stringify(embedding),
+        metadata: chunk.metadata,
+      });
 
-        if (insertError) {
-          throw new Error(`Chunk ${i} insert error: ${insertError.message}`);
-        }
-      } catch (chunkErr) {
-        const msg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr);
-        throw new Error(`Failed at chunk ${i}/${chunks.length}: ${msg}`);
+      if (insertError) {
+        throw new Error(`Chunk ${i} insert error: ${insertError.message}`);
       }
     }
 
-    // Update document: completed, clear file content from metadata
+    // Update document status, clean up storage file
     await supabase
       .from("knowledge_documents")
       .update({
@@ -91,16 +88,18 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", documentId);
 
+    // Delete the uploaded file from storage (no longer needed)
+    await supabase.storage.from("documents").remove([storagePath]);
+
     return NextResponse.json({
       success: true,
       chunks: chunks.length,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Processing failed";
-    const stack = err instanceof Error ? err.stack : "";
     await supabase
       .from("knowledge_documents")
-      .update({ status: "failed", error_message: `${message}\n${stack}` })
+      .update({ status: "failed", error_message: message })
       .eq("id", documentId);
 
     return NextResponse.json({ error: message }, { status: 500 });
