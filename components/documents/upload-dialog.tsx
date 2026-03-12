@@ -51,8 +51,15 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
       });
 
       if (!uploadRes.ok) {
-        const data = await uploadRes.json();
-        throw new Error(data.error || "Upload failed");
+        const text = await uploadRes.text();
+        let errorMsg = `Upload failed (${uploadRes.status})`;
+        try {
+          const data = JSON.parse(text);
+          errorMsg = data.error || errorMsg;
+        } catch {
+          errorMsg = text || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
       const doc = await uploadRes.json();
@@ -66,8 +73,15 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
       });
 
       if (!processRes.ok) {
-        const data = await processRes.json();
-        throw new Error(data.error || "Processing failed");
+        const text = await processRes.text();
+        let errorMsg = `Processing failed (${processRes.status})`;
+        try {
+          const data = JSON.parse(text);
+          errorMsg = data.error || errorMsg;
+        } catch {
+          errorMsg = text || errorMsg;
+        }
+        throw new Error(errorMsg);
       }
 
       setState("done");
