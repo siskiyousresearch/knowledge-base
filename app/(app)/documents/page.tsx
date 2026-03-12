@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -15,8 +15,8 @@ import {
   FileType,
   Globe,
   Presentation,
+  Image,
   Trash2,
-  RefreshCw,
   Loader2,
 } from "lucide-react";
 
@@ -29,6 +29,15 @@ const fileTypeIcons: Record<string, typeof FileText> = {
   ".xlsx": FileSpreadsheet,
   ".xls": FileSpreadsheet,
   ".pptx": Presentation,
+  ".png": Image,
+  ".jpg": Image,
+  ".jpeg": Image,
+  ".gif": Image,
+  ".webp": Image,
+  ".bmp": Image,
+  ".tiff": Image,
+  ".tif": Image,
+  ".svg": Image,
   url: Globe,
 };
 
@@ -43,6 +52,7 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const processingRef = useRef<Set<string>>(new Set());
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -58,10 +68,46 @@ export default function DocumentsPage() {
     fetchDocuments();
   }, [fetchDocuments]);
 
-  // Poll for processing documents
+  // Background queue processor: picks up pending docs and processes them one at a time
   useEffect(() => {
-    const hasProcessing = documents.some((d) => d.status === "processing" || d.status === "pending");
-    if (!hasProcessing) return;
+    const pendingDocs = documents.filter(
+      (d) => d.status === "pending" && !processingRef.current.has(d.id)
+    );
+
+    if (pendingDocs.length === 0) return;
+
+    async function processNext() {
+      const doc = pendingDocs[0];
+      if (!doc || processingRef.current.has(doc.id)) return;
+
+      processingRef.current.add(doc.id);
+
+      // Check if doc has a storagePath in metadata
+      const storagePath = doc.metadata?.storagePath as string | undefined;
+      if (!storagePath) {
+        processingRef.current.delete(doc.id);
+        return;
+      }
+
+      try {
+        await fetch("/api/documents/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentId: doc.id, storagePath }),
+        });
+      } finally {
+        processingRef.current.delete(doc.id);
+        fetchDocuments();
+      }
+    }
+
+    processNext();
+  }, [documents, fetchDocuments]);
+
+  // Poll while there are pending or processing documents
+  useEffect(() => {
+    const hasActive = documents.some((d) => d.status === "processing" || d.status === "pending");
+    if (!hasActive) return;
     const interval = setInterval(fetchDocuments, 3000);
     return () => clearInterval(interval);
   }, [documents, fetchDocuments]);
@@ -70,18 +116,6 @@ export default function DocumentsPage() {
     if (!confirm("Delete this document and all its chunks?")) return;
     await fetch(`/api/documents/${id}`, { method: "DELETE" });
     setDocuments((prev) => prev.filter((d) => d.id !== id));
-  }
-
-  async function handleProcess(id: string) {
-    setDocuments((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, status: "processing" as const } : d))
-    );
-    await fetch("/api/documents/process", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ documentId: id }),
-    });
-    fetchDocuments();
   }
 
   function handleUploadComplete() {
@@ -99,7 +133,7 @@ export default function DocumentsPage() {
         </div>
         <Button onClick={() => setUploadOpen(true)}>
           <Plus className="h-4 w-4" />
-          Add Document
+          Add Documents
         </Button>
       </div>
 
@@ -118,7 +152,7 @@ export default function DocumentsPage() {
           </p>
           <Button onClick={() => setUploadOpen(true)}>
             <Plus className="h-4 w-4" />
-            Add Your First Document
+            Add Your First Documents
           </Button>
         </Card>
       ) : (
@@ -134,20 +168,20 @@ export default function DocumentsPage() {
                     <span>{formatFileSize(doc.file_size)}</span>
                     <span>{formatDate(doc.created_at)}</span>
                     {doc.chunk_count > 0 && <span>{doc.chunk_count} chunks</span>}
+                    {doc.error_message && (
+                      <span className="text-status-failed truncate max-w-[200px]" title={doc.error_message}>
+                        {doc.error_message}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <Badge variant={statusVariants[doc.status]}>
-                  {doc.status === "processing" && (
+                  {(doc.status === "processing" || doc.status === "pending") && (
                     <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                   )}
                   {doc.status}
                 </Badge>
                 <div className="flex items-center gap-1">
-                  {doc.status === "pending" && (
-                    <Button variant="ghost" size="icon" onClick={() => handleProcess(doc.id)} title="Process document">
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                  )}
                   <Button variant="ghost" size="icon" onClick={() => handleDelete(doc.id)} title="Delete document">
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>

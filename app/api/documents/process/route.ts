@@ -5,10 +5,10 @@ import { chunkText, estimateTokenCount } from "@/lib/documents/chunker";
 import { generateEmbedding } from "@/lib/ai/embeddings";
 
 export async function POST(request: NextRequest) {
-  const { documentId, storagePath } = await request.json();
+  const { documentId, storagePath: passedPath } = await request.json();
 
-  if (!documentId || !storagePath) {
-    return NextResponse.json({ error: "documentId and storagePath required" }, { status: 400 });
+  if (!documentId) {
+    return NextResponse.json({ error: "documentId required" }, { status: 400 });
   }
 
   const supabase = createAdminClient();
@@ -31,6 +31,12 @@ export async function POST(request: NextRequest) {
     .eq("id", documentId);
 
   try {
+    // Get storage path from request or document metadata
+    const storagePath = passedPath || (doc.metadata?.storagePath as string | undefined);
+    if (!storagePath) {
+      throw new Error("Storage path not found");
+    }
+
     // Download file from Supabase Storage
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("documents")
