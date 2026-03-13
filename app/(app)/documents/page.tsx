@@ -53,6 +53,7 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const processingRef = useRef<Set<string>>(new Set());
+  const resumedRef = useRef(false);
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -67,6 +68,17 @@ export default function DocumentsPage() {
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
+
+  // Auto-resume stalled "processing" docs on page load
+  useEffect(() => {
+    if (resumedRef.current || loading) return;
+    resumedRef.current = true;
+    fetch("/api/documents/resume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }).then(() => fetchDocuments());
+  }, [loading, fetchDocuments]);
 
   // Background queue processor: picks up pending docs and processes them one at a time
   useEffect(() => {
