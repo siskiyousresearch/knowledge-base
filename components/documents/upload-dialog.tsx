@@ -20,6 +20,7 @@ interface UploadDialogProps {
   open: boolean;
   onClose: () => void;
   onComplete: () => void;
+  projectId?: string;
 }
 
 function getFileExtension(name: string): string {
@@ -27,7 +28,7 @@ function getFileExtension(name: string): string {
   return match ? match[0].toLowerCase() : "";
 }
 
-export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
+export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDialogProps) {
   const [tab, setTab] = useState<Tab>("file");
   const [files, setFiles] = useState<FileUploadState[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -92,6 +93,7 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
             fileName: file.name,
             fileType: extension,
             fileSize: file.size,
+            projectId,
           }),
         });
 
@@ -175,7 +177,7 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
         const res = await fetch("/api/documents/crawl", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: url.trim(), maxDepth: crawlDepth, maxPages }),
+          body: JSON.stringify({ url: url.trim(), maxDepth: crawlDepth, maxPages, projectId }),
         });
 
         if (!res.ok) {
@@ -192,7 +194,7 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
         const res = await fetch("/api/documents/scrape", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: url.trim() }),
+          body: JSON.stringify({ url: url.trim(), projectId }),
         });
 
         if (!res.ok) {

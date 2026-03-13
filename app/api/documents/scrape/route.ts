@@ -5,7 +5,7 @@ import { chunkText, estimateTokenCount } from "@/lib/documents/chunker";
 import { generateEmbedding } from "@/lib/ai/embeddings";
 
 export async function POST(request: NextRequest) {
-  const { url, documentId, crawlJobId, crawlDepth = 0 } = await request.json();
+  const { url, documentId, crawlJobId, crawlDepth = 0, projectId } = await request.json();
 
   if (!url && !documentId) {
     return NextResponse.json({ error: "url or documentId required" }, { status: 400 });
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient();
 
   // If documentId provided, fetch the doc to get the URL
-  let doc: { id: string; crawl_job_id: string | null; crawl_depth: number; file_name: string | null } | null = null;
+  let doc: { id: string; crawl_job_id: string | null; crawl_depth: number; file_name: string | null; project_id: string | null } | null = null;
   let targetUrl = url;
 
   if (documentId) {
@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
         file_type: "url",
         crawl_job_id: crawlJobId || null,
         crawl_depth: crawlDepth,
+        project_id: projectId || null,
       })
       .select()
       .single();
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
     if (insertError || !newDoc) {
       return NextResponse.json({ error: insertError?.message || "Failed to create document" }, { status: 500 });
     }
-    doc = { id: newDoc.id, crawl_job_id: newDoc.crawl_job_id, crawl_depth: newDoc.crawl_depth, file_name: newDoc.file_name };
+    doc = { id: newDoc.id, crawl_job_id: newDoc.crawl_job_id, crawl_depth: newDoc.crawl_depth, file_name: newDoc.file_name, project_id: newDoc.project_id };
   } else {
     await supabase
       .from("knowledge_documents")
@@ -144,6 +145,7 @@ export async function POST(request: NextRequest) {
               file_type: "url",
               crawl_job_id: jobId,
               crawl_depth: depth + 1,
+              project_id: doc.project_id || projectId || null,
               metadata: { url: link },
             }));
 

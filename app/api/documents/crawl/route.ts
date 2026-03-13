@@ -4,7 +4,7 @@ import { parseUrl } from "@/lib/documents/parsers/url";
 
 export async function POST(request: NextRequest) {
   try {
-    const { url, maxDepth = 1, maxPages = 50 } = await request.json();
+    const { url, maxDepth = 1, maxPages = 50, projectId } = await request.json();
 
     if (!url) {
       return NextResponse.json({ error: "url required" }, { status: 400 });
@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       file_type: string;
       crawl_job_id: string;
       crawl_depth: number;
+      project_id: string | null;
       metadata: Record<string, unknown>;
     }> = [];
 
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
       file_type: "url",
       crawl_job_id: job.id,
       crawl_depth: 0,
+      project_id: projectId || null,
       metadata: { url, storagePath: null },
     });
 
@@ -85,6 +87,7 @@ export async function POST(request: NextRequest) {
         file_type: "url",
         crawl_job_id: job.id,
         crawl_depth: 1,
+        project_id: projectId || null,
         metadata: { url: link, storagePath: null },
       });
     }

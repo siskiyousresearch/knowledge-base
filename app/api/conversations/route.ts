@@ -1,12 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const projectId = request.nextUrl.searchParams.get("projectId");
   const supabase = createAdminClient();
-  const { data, error } = await supabase
+
+  let query = supabase
     .from("knowledge_conversations")
     .select("id, title, created_at, updated_at")
     .order("updated_at", { ascending: false });
+
+  if (projectId) {
+    query = query.eq("project_id", projectId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -24,6 +32,7 @@ export async function POST(request: NextRequest) {
     .insert({
       title: body.title || "New Conversation",
       messages: [],
+      project_id: body.projectId || null,
     })
     .select()
     .single();

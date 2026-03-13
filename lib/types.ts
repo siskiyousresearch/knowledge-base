@@ -1,3 +1,12 @@
+export interface Project {
+  id: string;
+  title: string;
+  description: string | null;
+  document_count?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export type DocumentSource = "upload" | "url" | "google_drive";
 export type DocumentStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -13,6 +22,7 @@ export interface Document {
   chunk_count: number;
   error_message: string | null;
   metadata: Record<string, unknown>;
+  project_id: string | null;
   crawl_job_id: string | null;
   crawl_depth: number;
   created_at: string;
@@ -49,6 +59,7 @@ export interface ChatMessage {
 export interface Conversation {
   id: string;
   title: string;
+  project_id: string | null;
   messages: ChatMessage[];
   created_at: string;
   updated_at: string;

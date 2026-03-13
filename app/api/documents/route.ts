@@ -3,13 +3,20 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupportedExtension } from "@/lib/documents";
 import { MAX_FILE_SIZE } from "@/lib/constants";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const projectId = request.nextUrl.searchParams.get("projectId");
     const supabase = createAdminClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("knowledge_documents")
       .select("*")
       .order("created_at", { ascending: false });
+
+    if (projectId) {
+      query = query.eq("project_id", projectId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: `DB fetch error: ${error.message}` }, { status: 500 });
@@ -24,7 +31,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { fileName, fileType, fileSize } = await request.json();
+    const { fileName, fileType, fileSize, projectId } = await request.json();
 
     if (!fileName || !fileType) {
       return NextResponse.json({ error: "fileName and fileType are required" }, { status: 400 });
@@ -49,6 +56,7 @@ export async function POST(request: NextRequest) {
         file_name: fileName,
         file_type: fileType,
         file_size: fileSize,
+        project_id: projectId || null,
       })
       .select()
       .single();

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 
 const pageTitles: Record<string, string> = {
+  "/projects": "Projects",
   "/documents": "Documents",
   "/chat": "Chat with Knowledge Base",
   "/settings": "Settings",
@@ -10,6 +11,12 @@ const pageTitles: Record<string, string> = {
 
 export function Header() {
   const pathname = usePathname();
+
+  // Hide header on project detail pages (they have their own header)
+  if (pathname.match(/^\/projects\/[^/]+$/)) {
+    return null;
+  }
+
   const title = Object.entries(pageTitles).find(([path]) => pathname.startsWith(path))?.[1] || "Knowledge Base";
 
   return (

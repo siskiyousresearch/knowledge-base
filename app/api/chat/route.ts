@@ -8,9 +8,10 @@ import { checkBudget } from "@/lib/ai/usage";
 import { logUsage } from "@/lib/ai/usage";
 
 export async function POST(request: NextRequest) {
-  const { messages, conversationId } = (await request.json()) as {
+  const { messages, conversationId, projectId } = (await request.json()) as {
     messages: ChatMessage[];
     conversationId?: string;
+    projectId?: string;
   };
 
   if (!messages?.length) {
@@ -37,15 +38,18 @@ export async function POST(request: NextRequest) {
   // 1. Embed user query
   const queryEmbedding = await generateEmbedding(userMessage);
 
-  // 2. Vector similarity search
-  const { data: chunks, error: searchError } = await supabase.rpc(
-    "knowledge_match_chunks",
-    {
-      query_embedding: JSON.stringify(queryEmbedding),
-      match_threshold: SIMILARITY_THRESHOLD,
-      match_count: MAX_CONTEXT_CHUNKS,
-    }
-  );
+  // 2. Vector similarity search (project-scoped if projectId provided)
+  const rpcName = projectId ? "knowledge_match_chunks_by_project" : "knowledge_match_chunks";
+  const rpcParams: Record<string, unknown> = {
+    query_embedding: JSON.stringify(queryEmbedding),
+    match_threshold: SIMILARITY_THRESHOLD,
+    match_count: MAX_CONTEXT_CHUNKS,
+  };
+  if (projectId) {
+    rpcParams.p_project_id = projectId;
+  }
+
+  const { data: chunks, error: searchError } = await supabase.rpc(rpcName, rpcParams);
 
   if (searchError) {
     return new Response(JSON.stringify({ error: searchError.message }), {
