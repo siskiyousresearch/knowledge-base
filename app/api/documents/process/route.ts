@@ -31,10 +31,12 @@ export async function POST(request: NextRequest) {
     .eq("id", documentId);
 
   try {
-    // Get storage path from request or document metadata
-    const storagePath = passedPath || (doc.metadata?.storagePath as string | undefined);
+    // Get storage path from request, metadata, or construct from document info
+    const storagePath = passedPath
+      || (doc.metadata?.storagePath as string | undefined)
+      || (doc.file_name ? `uploads/${documentId}/${doc.file_name}` : null);
     if (!storagePath) {
-      throw new Error("Storage path not found");
+      throw new Error("Storage path not found and cannot be constructed");
     }
 
     // Create a signed URL to download the file (avoids RLS issues)

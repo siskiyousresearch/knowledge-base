@@ -71,7 +71,7 @@ export default function DocumentsPage() {
   // Background queue processor: picks up pending docs and processes them one at a time
   useEffect(() => {
     const pendingDocs = documents.filter(
-      (d) => d.status === "pending" && !processingRef.current.has(d.id)
+      (d) => d.status === "pending" && d.file_name && !processingRef.current.has(d.id)
     );
 
     if (pendingDocs.length === 0) return;
@@ -82,12 +82,9 @@ export default function DocumentsPage() {
 
       processingRef.current.add(doc.id);
 
-      // Check if doc has a storagePath in metadata
-      const storagePath = doc.metadata?.storagePath as string | undefined;
-      if (!storagePath) {
-        processingRef.current.delete(doc.id);
-        return;
-      }
+      // Use storagePath from metadata, or construct from document info
+      const storagePath = (doc.metadata?.storagePath as string | undefined)
+        || `uploads/${doc.id}/${doc.file_name}`;
 
       try {
         await fetch("/api/documents/process", {
@@ -101,7 +98,9 @@ export default function DocumentsPage() {
       }
     }
 
-    processNext();
+    // Small delay to let any in-flight uploads finish
+    const timer = setTimeout(processNext, 2000);
+    return () => clearTimeout(timer);
   }, [documents, fetchDocuments]);
 
   // Poll while there are pending or processing documents
