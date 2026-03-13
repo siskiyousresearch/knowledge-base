@@ -37,16 +37,21 @@ export async function POST(request: NextRequest) {
       throw new Error("Storage path not found");
     }
 
-    // Download file from Supabase Storage
-    const { data: fileData, error: downloadError } = await supabase.storage
+    // Create a signed URL to download the file (avoids RLS issues)
+    const { data: signedData, error: signedError } = await supabase.storage
       .from("documents")
-      .download(storagePath);
+      .createSignedUrl(storagePath, 300); // 5 min expiry
 
-    if (downloadError || !fileData) {
-      throw new Error(`Storage download error: ${downloadError?.message || "no data"}`);
+    if (signedError || !signedData?.signedUrl) {
+      throw new Error(`Signed URL error: ${JSON.stringify(signedError)}`);
     }
 
-    const buffer = Buffer.from(await fileData.arrayBuffer());
+    const downloadRes = await fetch(signedData.signedUrl);
+    if (!downloadRes.ok) {
+      throw new Error(`Download failed (${downloadRes.status}): ${await downloadRes.text()}`);
+    }
+
+    const buffer = Buffer.from(await downloadRes.arrayBuffer());
     const extension = doc.file_type || "";
 
     // Parse document
