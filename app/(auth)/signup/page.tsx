@@ -23,7 +23,7 @@ export default function SignupPage() {
     setLoading(true);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({ email, password });
 
     if (error) {
       setError(error.message);
@@ -31,6 +31,13 @@ export default function SignupPage() {
       return;
     }
 
+    // If auto-confirm is enabled, session will exist — redirect immediately
+    if (data.session) {
+      router.push("/projects");
+      return;
+    }
+
+    // Otherwise show confirmation message
     setSuccess(true);
     setLoading(false);
   }
