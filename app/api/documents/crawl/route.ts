@@ -10,8 +10,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "url required" }, { status: 400 });
     }
 
-    const clampedDepth = Math.min(Math.max(1, maxDepth), 3);
-    const clampedPages = Math.min(Math.max(1, maxPages), 500);
+    const clampedDepth = Math.min(Math.max(1, maxDepth), 99);
+    const clampedPages = Math.min(Math.max(1, maxPages), 5000);
 
     const supabase = createAdminClient();
 

@@ -36,7 +36,7 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
   const [urlState, setUrlState] = useState<"idle" | "processing" | "done" | "error">("idle");
   const [urlError, setUrlError] = useState("");
   const [crawlDepth, setCrawlDepth] = useState(0);
-  const [maxPages, setMaxPages] = useState(50);
+  const [maxPages, setMaxPages] = useState(100);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -393,6 +393,7 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
                   <option value={1}>1 level deep</option>
                   <option value={2}>2 levels deep</option>
                   <option value={3}>3 levels deep</option>
+                  <option value={99}>Entire site (unlimited depth)</option>
                 </select>
               </div>
               {crawlDepth > 0 && (
@@ -401,19 +402,19 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
                   <Input
                     type="number"
                     min={1}
-                    max={500}
+                    max={5000}
                     value={maxPages}
-                    onChange={(e) => setMaxPages(Math.min(500, Math.max(1, Number(e.target.value))))}
+                    onChange={(e) => setMaxPages(Math.min(5000, Math.max(1, Number(e.target.value))))}
                     className="flex-1"
                   />
-                  {maxPages > 100 && (
-                    <span className="text-xs text-yellow-600">Large crawl</span>
+                  {maxPages > 500 && (
+                    <span className="text-xs text-yellow-600">Large crawl — may take a while</span>
                   )}
                 </div>
               )}
               <Button className="w-full" onClick={handleUrlSubmit} disabled={!url.trim()}>
                 <Globe className="h-4 w-4" />
-                {crawlDepth > 0 ? `Crawl Site (up to ${maxPages} pages)` : "Scrape & Add"}
+                {crawlDepth > 0 ? (crawlDepth >= 99 ? `Crawl Entire Site (up to ${maxPages} pages)` : `Crawl Site (up to ${maxPages} pages)`) : "Scrape & Add"}
               </Button>
             </div>
           )
