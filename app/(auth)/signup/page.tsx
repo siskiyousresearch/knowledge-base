@@ -31,13 +31,22 @@ export default function SignupPage() {
       return;
     }
 
-    // If auto-confirm is enabled, session will exist — redirect immediately
+    // If session returned, redirect immediately
     if (data.session) {
       router.push("/projects");
       return;
     }
 
-    // Otherwise show confirmation message
+    // Auto-confirm may confirm the user without returning a session — sign in automatically
+    if (data.user?.email_confirmed_at) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (!signInError) {
+        router.push("/projects");
+        return;
+      }
+    }
+
+    // Fallback: show confirmation message if email isn't confirmed
     setSuccess(true);
     setLoading(false);
   }
