@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/ai/embeddings";
 import { chatCompletionStream } from "@/lib/ai/openrouter";
-import { CHAT_MODEL, SIMILARITY_THRESHOLD, MAX_CONTEXT_CHUNKS } from "@/lib/constants";
+import { SIMILARITY_THRESHOLD, MAX_CONTEXT_CHUNKS } from "@/lib/constants";
+import { DEFAULT_MODEL_ID } from "@/lib/ai/models";
 import { ChatMessage, ChunkSearchResult } from "@/lib/types";
 import { checkBudget } from "@/lib/ai/usage";
 import { logUsage } from "@/lib/ai/usage";
@@ -98,9 +99,19 @@ If the context does NOT contain relevant information, respond with: "I don't hav
 ${contextBlock}`,
   };
 
-  // 5. Stream response from DeepSeek
+  // 5. Resolve model: project model > default
+  let modelId = DEFAULT_MODEL_ID;
+  if (projectId) {
+    const { data: proj } = await supabase
+      .from("knowledge_projects")
+      .select("model_id")
+      .eq("id", projectId)
+      .single();
+    if (proj?.model_id) modelId = proj.model_id;
+  }
+
   const fullMessages = [systemMessage, ...messages];
-  const stream = await chatCompletionStream(fullMessages);
+  const stream = await chatCompletionStream(fullMessages, { model: modelId });
 
   // 6. Create a transform stream to pass through SSE data and save conversation after
   const encoder = new TextEncoder();
@@ -152,7 +163,7 @@ ${contextBlock}`,
 
         await logUsage({
           conversationId: conversationId || undefined,
-          model: CHAT_MODEL,
+          model: modelId,
           promptTokens,
           completionTokens,
         });

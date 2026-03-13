@@ -1,4 +1,3 @@
-export const CHAT_MODEL = "deepseek/deepseek-chat-v3-0324";
 export const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 export const EMBEDDING_DIMENSIONS = 384;
 

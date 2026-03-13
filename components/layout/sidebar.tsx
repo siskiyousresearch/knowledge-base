@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { FolderOpen, Settings, Database, Plus } from "lucide-react";
+import { FolderOpen, Settings, Database, Plus, LogOut } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Project } from "@/lib/types";
@@ -102,8 +103,8 @@ export function Sidebar() {
           })}
         </div>
 
-        {/* Settings at bottom */}
-        <div className="mt-auto pt-2 border-t border-border">
+        {/* Settings and logout at bottom */}
+        <div className="mt-auto pt-2 border-t border-border space-y-0.5">
           <Link
             href="/settings"
             className={cn(
@@ -116,6 +117,18 @@ export function Sidebar() {
             <Settings className="h-4 w-4" />
             Settings
           </Link>
+          <button
+            onClick={async () => {
+              const supabase = createClient();
+              await supabase.auth.signOut();
+              router.push("/login");
+              router.refresh();
+            }}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </button>
         </div>
       </nav>
     </aside>

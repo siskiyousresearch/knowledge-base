@@ -52,9 +52,10 @@ const statusVariants: Record<DocumentStatus, "pending" | "processing" | "complet
 
 interface SourcesPanelProps {
   projectId: string;
+  onViewDocument?: (documentId: string) => void;
 }
 
-export function SourcesPanel({ projectId }: SourcesPanelProps) {
+export function SourcesPanel({ projectId, onViewDocument }: SourcesPanelProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -298,7 +299,11 @@ export function SourcesPanel({ projectId }: SourcesPanelProps) {
             {documents.map((doc) => {
               const Icon = fileTypeIcons[doc.file_type || ""] || FileText;
               return (
-                <Card key={doc.id} className="flex items-center gap-2 p-2.5">
+                <Card
+                  key={doc.id}
+                  className="flex items-center gap-2 p-2.5 cursor-pointer hover:bg-accent/50 transition-colors"
+                  onClick={() => doc.status === "completed" && onViewDocument?.(doc.id)}
+                >
                   <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{doc.title}</p>

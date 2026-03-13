@@ -2,6 +2,9 @@ export interface Project {
   id: string;
   title: string;
   description: string | null;
+  model_id: string | null;
+  share_id: string | null;
+  is_shared: boolean;
   document_count?: number;
   created_at: string;
   updated_at: string;
@@ -25,6 +28,7 @@ export interface Document {
   project_id: string | null;
   crawl_job_id: string | null;
   crawl_depth: number;
+  tags?: Tag[];
   created_at: string;
   updated_at: string;
 }
@@ -89,4 +93,43 @@ export interface UsageLog {
   total_tokens: number;
   cost_usd: number;
   created_at: string;
+}
+
+export interface Note {
+  id: string;
+  project_id: string;
+  title: string | null;
+  content: string;
+  source_type: "manual" | "ai_generated" | "snippet";
+  source_chunk_id: string | null;
+  source_document_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Tag {
+  id: string;
+  project_id: string;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
+export interface Artifact {
+  id: string;
+  project_id: string;
+  type: "summary" | "faq" | "study_guide" | "briefing";
+  title: string;
+  content: string;
+  model_used: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  pricing: { input: number; output: number };
 }

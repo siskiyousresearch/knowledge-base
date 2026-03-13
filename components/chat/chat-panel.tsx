@@ -15,7 +15,11 @@ import {
   ChevronUp,
   Trash2,
   Loader2,
+  Download,
+  StickyNote,
 } from "lucide-react";
+import { SuggestedQuestions } from "@/components/chat/suggested-questions";
+import { ExportButton } from "@/components/chat/export-button";
 
 interface ChatPanelProps {
   projectId: string;
@@ -187,10 +191,18 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
     <div className="flex h-full">
       {/* Conversation list */}
       <div className="w-56 border-r border-border bg-card/50 p-2 flex flex-col">
-        <Button className="mb-2 w-full" size="sm" variant="outline" onClick={createConversation}>
-          <Plus className="h-4 w-4" />
-          New Chat
-        </Button>
+        <div className="flex gap-1 mb-2">
+          <Button className="flex-1" size="sm" variant="outline" onClick={createConversation}>
+            <Plus className="h-4 w-4" />
+            New Chat
+          </Button>
+          {activeId && messages.length > 0 && (
+            <ExportButton
+              messages={messages}
+              title={conversations.find((c) => c.id === activeId)?.title || "Conversation"}
+            />
+          )}
+        </div>
         <div className="flex-1 space-y-0.5 overflow-auto">
           {loadingConvos ? (
             [1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full" />)
@@ -230,17 +242,65 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
       {/* Chat area */}
       <div className="flex flex-1 flex-col">
         {!activeId && messages.length === 0 ? (
-          <div className="flex flex-1 items-center justify-center">
-            <div className="text-center">
-              <MessageSquare className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-              <h3 className="mb-1 text-sm font-semibold">Chat with your sources</h3>
-              <p className="mb-3 text-xs text-muted-foreground">
-                Ask questions about the documents in this project.
-              </p>
-              <Button size="sm" onClick={createConversation}>
-                <Plus className="h-4 w-4" />
-                Start a Conversation
-              </Button>
+          <div className="flex flex-1 flex-col items-center justify-center p-6">
+            <MessageSquare className="mb-3 h-10 w-10 text-muted-foreground" />
+            <h3 className="mb-1 text-sm font-semibold">Chat with your sources</h3>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Ask questions or try a suggestion below.
+            </p>
+            <div className="w-full max-w-lg mb-4">
+              <SuggestedQuestions
+                projectId={projectId}
+                onSelect={async (q) => {
+                  setInput("");
+                  // Create conversation and send directly
+                  const res = await fetch("/api/conversations", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ projectId }),
+                  });
+                  const data = await res.json();
+                  setActiveId(data.id);
+                  setConversations((prev) => [data, ...prev]);
+
+                  const userMsg: ChatMessage = { role: "user", content: q };
+                  setMessages([userMsg]);
+                  setStreaming(true);
+
+                  try {
+                    const chatRes = await fetch("/api/chat", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ messages: [userMsg], conversationId: data.id, projectId }),
+                    });
+                    if (!chatRes.ok) throw new Error();
+                    const reader = chatRes.body!.getReader();
+                    const decoder = new TextDecoder();
+                    let content = "";
+                    let srcs: ChunkSearchResult[] = [];
+                    setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+                      for (const line of decoder.decode(value, { stream: true }).split("\n")) {
+                        if (!line.startsWith("data: ")) continue;
+                        const d = line.slice(6);
+                        if (d === "[DONE]") continue;
+                        try {
+                          const p = JSON.parse(d);
+                          if (p.content) { content += p.content; setMessages((prev) => { const u = [...prev]; u[u.length - 1] = { role: "assistant", content, sources: srcs }; return u; }); }
+                          if (p.sources) { srcs = p.sources; setMessages((prev) => { const u = [...prev]; u[u.length - 1] = { role: "assistant", content, sources: srcs }; return u; }); }
+                        } catch {}
+                      }
+                    }
+                    fetchConversations();
+                  } catch {
+                    setMessages((prev) => [...prev.slice(0, -1), { role: "assistant", content: "Sorry, something went wrong." }]);
+                  } finally {
+                    setStreaming(false);
+                  }
+                }}
+              />
             </div>
           </div>
         ) : (

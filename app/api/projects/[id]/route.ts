@@ -32,6 +32,7 @@ export async function PATCH(
   const updates: Record<string, unknown> = {};
   if (body.title !== undefined) updates.title = body.title.trim();
   if (body.description !== undefined) updates.description = body.description?.trim() || null;
+  if (body.model_id !== undefined) updates.model_id = body.model_id || null;
 
   const { data, error } = await supabase
     .from("knowledge_projects")
