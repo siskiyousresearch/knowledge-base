@@ -82,16 +82,30 @@ export default function DocumentsPage() {
 
       processingRef.current.add(doc.id);
 
-      // Use storagePath from metadata, or construct from document info
-      const storagePath = (doc.metadata?.storagePath as string | undefined)
-        || `uploads/${doc.id}/${doc.file_name}`;
-
       try {
-        await fetch("/api/documents/process", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ documentId: doc.id, storagePath }),
-        });
+        if (doc.source === "url") {
+          // URL documents: use scrape endpoint
+          const url = (doc.metadata?.url as string) || doc.file_name;
+          await fetch("/api/documents/scrape", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              documentId: doc.id,
+              url,
+              crawlJobId: doc.crawl_job_id,
+              crawlDepth: doc.crawl_depth,
+            }),
+          });
+        } else {
+          // File documents: use process endpoint
+          const storagePath = (doc.metadata?.storagePath as string | undefined)
+            || `uploads/${doc.id}/${doc.file_name}`;
+          await fetch("/api/documents/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ documentId: doc.id, storagePath }),
+          });
+        }
       } finally {
         processingRef.current.delete(doc.id);
         fetchDocuments();

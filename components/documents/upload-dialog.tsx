@@ -34,6 +34,8 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
   const [url, setUrl] = useState("");
   const [urlState, setUrlState] = useState<"idle" | "processing" | "done" | "error">("idle");
   const [urlError, setUrlError] = useState("");
+  const [crawlDepth, setCrawlDepth] = useState(0);
+  const [maxPages, setMaxPages] = useState(50);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -168,19 +170,39 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
     setUrlError("");
 
     try {
-      const res = await fetch("/api/documents/scrape", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
-      });
+      if (crawlDepth > 0) {
+        // Use crawl endpoint for multi-page crawling
+        const res = await fetch("/api/documents/crawl", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: url.trim(), maxDepth: crawlDepth, maxPages }),
+        });
 
-      if (!res.ok) {
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Crawl failed");
+        }
+
         const data = await res.json();
-        throw new Error(data.error || "Scraping failed");
-      }
+        setUrlState("done");
+        setUrlError(`Found ${data.pagesFound} pages. Processing will begin automatically.`);
+        setTimeout(onComplete, 2000);
+      } else {
+        // Single page scrape
+        const res = await fetch("/api/documents/scrape", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: url.trim() }),
+        });
 
-      setUrlState("done");
-      setTimeout(onComplete, 1000);
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Scraping failed");
+        }
+
+        setUrlState("done");
+        setTimeout(onComplete, 1000);
+      }
     } catch (err) {
       setUrlState("error");
       setUrlError(err instanceof Error ? err.message : "Something went wrong");
@@ -356,11 +378,40 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
                 placeholder="https://example.com/article or Google Drive share link"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
+                onKeyDown={(e) => e.key === "Enter" && crawlDepth === 0 && handleUrlSubmit()}
               />
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-muted-foreground whitespace-nowrap">Crawl depth:</label>
+                <select
+                  className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+                  value={crawlDepth}
+                  onChange={(e) => setCrawlDepth(Number(e.target.value))}
+                >
+                  <option value={0}>Single page only</option>
+                  <option value={1}>1 level deep</option>
+                  <option value={2}>2 levels deep</option>
+                  <option value={3}>3 levels deep</option>
+                </select>
+              </div>
+              {crawlDepth > 0 && (
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">Max pages:</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={maxPages}
+                    onChange={(e) => setMaxPages(Math.min(500, Math.max(1, Number(e.target.value))))}
+                    className="flex-1"
+                  />
+                  {maxPages > 100 && (
+                    <span className="text-xs text-yellow-600">Large crawl</span>
+                  )}
+                </div>
+              )}
               <Button className="w-full" onClick={handleUrlSubmit} disabled={!url.trim()}>
                 <Globe className="h-4 w-4" />
-                Scrape & Add
+                {crawlDepth > 0 ? `Crawl Site (up to ${maxPages} pages)` : "Scrape & Add"}
               </Button>
             </div>
           )

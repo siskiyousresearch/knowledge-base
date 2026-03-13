@@ -1,0 +1,114 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { parseUrl } from "@/lib/documents/parsers/url";
+
+export async function POST(request: NextRequest) {
+  try {
+    const { url, maxDepth = 1, maxPages = 50 } = await request.json();
+
+    if (!url) {
+      return NextResponse.json({ error: "url required" }, { status: 400 });
+    }
+
+    const clampedDepth = Math.min(Math.max(1, maxDepth), 3);
+    const clampedPages = Math.min(Math.max(1, maxPages), 500);
+
+    const supabase = createAdminClient();
+
+    // Create crawl job
+    const { data: job, error: jobError } = await supabase
+      .from("knowledge_crawl_jobs")
+      .insert({
+        root_url: url,
+        max_depth: clampedDepth,
+        max_pages: clampedPages,
+        status: "running",
+      })
+      .select()
+      .single();
+
+    if (jobError || !job) {
+      return NextResponse.json({ error: `Failed to create crawl job: ${jobError?.message}` }, { status: 500 });
+    }
+
+    // Parse root page to discover links
+    let rootLinks: string[] = [];
+    let rootText = "";
+    let rootTitle = url;
+
+    try {
+      const result = await parseUrl(url);
+      rootText = result.text;
+      rootTitle = (result.metadata.title as string) || url;
+      rootLinks = result.links;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await supabase
+        .from("knowledge_crawl_jobs")
+        .update({ status: "failed" })
+        .eq("id", job.id);
+      return NextResponse.json({ error: `Failed to fetch root URL: ${msg}` }, { status: 500 });
+    }
+
+    // Create root page document (status: pending, will be processed by queue)
+    const docsToInsert: Array<{
+      title: string;
+      source: string;
+      status: string;
+      file_name: string;
+      file_type: string;
+      crawl_job_id: string;
+      crawl_depth: number;
+      metadata: Record<string, unknown>;
+    }> = [];
+
+    // Root page
+    docsToInsert.push({
+      title: rootTitle,
+      source: "url",
+      status: "pending",
+      file_name: url,
+      file_type: "url",
+      crawl_job_id: job.id,
+      crawl_depth: 0,
+      metadata: { url, storagePath: null },
+    });
+
+    // Discovered links (depth 1)
+    const linksToAdd = rootLinks.slice(0, clampedPages - 1);
+    for (const link of linksToAdd) {
+      docsToInsert.push({
+        title: link,
+        source: "url",
+        status: "pending",
+        file_name: link,
+        file_type: "url",
+        crawl_job_id: job.id,
+        crawl_depth: 1,
+        metadata: { url: link, storagePath: null },
+      });
+    }
+
+    const { error: insertError } = await supabase
+      .from("knowledge_documents")
+      .insert(docsToInsert);
+
+    if (insertError) {
+      return NextResponse.json({ error: `Failed to create documents: ${insertError.message}` }, { status: 500 });
+    }
+
+    // Update crawl job counter
+    await supabase
+      .from("knowledge_crawl_jobs")
+      .update({ pages_found: docsToInsert.length })
+      .eq("id", job.id);
+
+    return NextResponse.json({
+      crawlJobId: job.id,
+      pagesFound: docsToInsert.length,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 const pageTitles: Record<string, string> = {
   "/documents": "Documents",
   "/chat": "Chat with Knowledge Base",
+  "/settings": "Settings",
 };
 
 export function Header() {

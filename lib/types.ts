@@ -13,6 +13,8 @@ export interface Document {
   chunk_count: number;
   error_message: string | null;
   metadata: Record<string, unknown>;
+  crawl_job_id: string | null;
+  crawl_depth: number;
   created_at: string;
   updated_at: string;
 }
@@ -50,4 +52,30 @@ export interface Conversation {
   messages: ChatMessage[];
   created_at: string;
   updated_at: string;
+}
+
+export type CrawlStatus = "running" | "completed" | "cancelled" | "failed";
+
+export interface CrawlJob {
+  id: string;
+  root_url: string;
+  max_depth: number;
+  max_pages: number;
+  pages_found: number;
+  pages_completed: number;
+  pages_failed: number;
+  status: CrawlStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UsageLog {
+  id: string;
+  conversation_id: string | null;
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  created_at: string;
 }

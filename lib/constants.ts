@@ -5,7 +5,7 @@ export const EMBEDDING_DIMENSIONS = 384;
 export const CHUNK_SIZE = 1000;
 export const CHUNK_OVERLAP = 200;
 
-export const SIMILARITY_THRESHOLD = 0.5;
+export const SIMILARITY_THRESHOLD = 0.3;
 export const MAX_CONTEXT_CHUNKS = 5;
 
 export const SUPPORTED_FILE_TYPES: Record<string, string[]> = {

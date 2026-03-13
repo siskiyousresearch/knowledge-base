@@ -2,8 +2,10 @@ import { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateEmbedding } from "@/lib/ai/embeddings";
 import { chatCompletionStream } from "@/lib/ai/openrouter";
-import { SIMILARITY_THRESHOLD, MAX_CONTEXT_CHUNKS } from "@/lib/constants";
+import { CHAT_MODEL, SIMILARITY_THRESHOLD, MAX_CONTEXT_CHUNKS } from "@/lib/constants";
 import { ChatMessage, ChunkSearchResult } from "@/lib/types";
+import { checkBudget } from "@/lib/ai/usage";
+import { logUsage } from "@/lib/ai/usage";
 
 export async function POST(request: NextRequest) {
   const { messages, conversationId } = (await request.json()) as {
@@ -16,6 +18,17 @@ export async function POST(request: NextRequest) {
       status: 400,
       headers: { "Content-Type": "application/json" },
     });
+  }
+
+  // Check daily budget
+  const budget = await checkBudget();
+  if (!budget.allowed) {
+    return new Response(
+      JSON.stringify({
+        error: `Daily budget exceeded. Today's spend: $${budget.todaySpend.toFixed(4)} / $${budget.dailyBudget?.toFixed(2)} limit.`,
+      }),
+      { status: 429, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   const supabase = createAdminClient();
@@ -72,7 +85,10 @@ export async function POST(request: NextRequest) {
 
   const systemMessage: ChatMessage = {
     role: "system",
-    content: `You are a helpful knowledge base assistant. Answer questions using the provided context from the knowledge base documents. If the context doesn't contain relevant information, say so clearly. Always cite which source(s) you're drawing from.
+    content: `You are a knowledge base assistant. You must ONLY answer using the provided context from the knowledge base documents below. Do NOT use any outside knowledge, training data, or general information.
+
+If the context contains relevant information, answer the question and cite which source(s) you're drawing from.
+If the context does NOT contain relevant information, respond with: "I don't have information about that in the knowledge base." Do not guess, speculate, or supplement with outside knowledge.
 
 ## Context from Knowledge Base:
 ${contextBlock}`,
@@ -87,17 +103,16 @@ ${contextBlock}`,
   const decoder = new TextDecoder();
 
   let assistantContent = "";
+  let usageData: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null = null;
 
   const transformStream = new TransformStream({
     transform(chunk, controller) {
       const text = decoder.decode(chunk, { stream: true });
-      // Extract content from SSE data lines
       const lines = text.split("\n");
       for (const line of lines) {
         if (line.startsWith("data: ")) {
           const data = line.slice(6);
           if (data === "[DONE]") {
-            // Append sources metadata
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({ sources })}\n\n`
@@ -115,6 +130,10 @@ ${contextBlock}`,
                 encoder.encode(`data: ${JSON.stringify({ content: delta })}\n\n`)
               );
             }
+            // Capture usage data from the final chunk
+            if (parsed.usage) {
+              usageData = parsed.usage;
+            }
           } catch {
             // Skip malformed SSE lines
           }
@@ -122,6 +141,21 @@ ${contextBlock}`,
       }
     },
     async flush() {
+      // Log usage
+      try {
+        const promptTokens = usageData?.prompt_tokens || Math.ceil(JSON.stringify(fullMessages).length / 4);
+        const completionTokens = usageData?.completion_tokens || Math.ceil(assistantContent.length / 4);
+
+        await logUsage({
+          conversationId: conversationId || undefined,
+          model: CHAT_MODEL,
+          promptTokens,
+          completionTokens,
+        });
+      } catch {
+        // Don't fail the response if usage logging fails
+      }
+
       // Save conversation to DB
       if (assistantContent && conversationId) {
         const allMessages = [
