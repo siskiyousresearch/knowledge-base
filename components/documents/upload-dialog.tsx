@@ -112,7 +112,7 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
           throw new Error(data.error || `Upload URL failed (${urlRes.status})`);
         }
 
-        const { signedUrl, token } = await urlRes.json();
+        const { signedUrl, storagePath } = await urlRes.json();
 
         // Step 3: Upload file directly to Supabase Storage via signed URL
         const uploadRes = await fetch(signedUrl, {
@@ -127,6 +127,18 @@ export function UploadDialog({ open, onClose, onComplete }: UploadDialogProps) {
         if (!uploadRes.ok) {
           const text = await uploadRes.text();
           throw new Error(`Storage upload failed: ${text}`);
+        }
+
+        // Step 4: Confirm upload — save storagePath so queue processor can pick it up
+        const confirmRes = await fetch(`/api/documents/${doc.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storagePath }),
+        });
+
+        if (!confirmRes.ok) {
+          const data = await confirmRes.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to confirm upload");
         }
 
         setFiles((prev) =>

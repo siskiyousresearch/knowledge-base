@@ -21,12 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Signed URL error: ${error.message}` }, { status: 500 });
     }
 
-    // Save storage path to document metadata
-    await supabase
-      .from("knowledge_documents")
-      .update({ metadata: { storagePath } })
-      .eq("id", documentId);
-
+    // Don't save storagePath yet — client will confirm after upload completes
     return NextResponse.json({
       signedUrl: data.signedUrl,
       token: data.token,
