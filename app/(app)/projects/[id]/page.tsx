@@ -214,23 +214,27 @@ export default function ProjectDetailPage() {
           </div>
 
           {/* Model selector */}
-          {aiMode === "local" ? (
-            <span className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
-              <Monitor className="h-3 w-3" />
-              {localModelName || "Local AI"}
-            </span>
-          ) : (
-            <select
-              className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-              value={project.model_id || ""}
-              onChange={(e) => changeModel(e.target.value)}
-            >
-              <option value="">Default (DeepSeek V3)</option>
-              {AVAILABLE_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
-          )}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground">Model:</span>
+            {aiMode === "local" ? (
+              <span className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
+                <Monitor className="h-3 w-3" />
+                {localModelName || "Local AI"}
+              </span>
+            ) : (
+              <select
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+                value={project.model_id || ""}
+                onChange={(e) => changeModel(e.target.value)}
+                title="AI model used for chat responses in this project"
+              >
+                <option value="">Default (DeepSeek V3)</option>
+                {AVAILABLE_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
 
           <Button size="sm" variant="outline" onClick={() => setGenerateOpen(true)}>
             <Sparkles className="h-3.5 w-3.5" />
