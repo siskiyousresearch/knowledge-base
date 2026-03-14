@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ALL_EXTENSIONS } from "@/lib/constants";
 import { Upload, Globe, Loader2, CheckCircle, XCircle, File, List } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DocumentCategory } from "@/lib/templates";
 
 type Tab = "file" | "url" | "bulk";
 
@@ -14,6 +15,7 @@ interface FileUploadState {
   file: File;
   status: "pending" | "uploading" | "done" | "error";
   error?: string;
+  category?: string;
 }
 
 interface UploadDialogProps {
@@ -21,6 +23,7 @@ interface UploadDialogProps {
   onClose: () => void;
   onComplete: () => void;
   projectId?: string;
+  documentCategories?: DocumentCategory[];
 }
 
 function getFileExtension(name: string): string {
@@ -28,10 +31,11 @@ function getFileExtension(name: string): string {
   return match ? match[0].toLowerCase() : "";
 }
 
-export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDialogProps) {
+export function UploadDialog({ open, onClose, onComplete, projectId, documentCategories }: UploadDialogProps) {
   const [tab, setTab] = useState<Tab>("file");
   const [files, setFiles] = useState<FileUploadState[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [url, setUrl] = useState("");
   const [urlState, setUrlState] = useState<"idle" | "processing" | "done" | "error">("idle");
   const [urlError, setUrlError] = useState("");
@@ -42,10 +46,12 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
   const [bulkResult, setBulkResult] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const hasCategories = documentCategories && documentCategories.length > 0;
 
   function reset() {
     setFiles([]);
     setUploading(false);
+    setSelectedCategory("");
     setUrl("");
     setUrlState("idle");
     setUrlError("");
@@ -92,6 +98,9 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
         const extension = getFileExtension(file.name);
 
         // Step 1: Create DB record
+        const metadata: Record<string, unknown> = {};
+        if (selectedCategory) metadata.category = selectedCategory;
+
         const createRes = await fetch("/api/documents", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -100,6 +109,7 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
             fileType: extension,
             fileSize: file.size,
             projectId,
+            metadata,
           }),
         });
 
@@ -349,6 +359,21 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
           )
         ) : tab === "file" ? (
           <div className="space-y-3">
+            {hasCategories && (
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-muted-foreground whitespace-nowrap">Category:</label>
+                <select
+                  className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                >
+                  <option value="">No category</option>
+                  {documentCategories!.map((cat) => (
+                    <option key={cat.name} value={cat.name}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div
               className={cn(
                 "flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors",
@@ -465,6 +490,21 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
             </div>
           ) : (
             <div className="space-y-3">
+              {hasCategories && (
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">Category:</label>
+                  <select
+                    className="flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm"
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                  >
+                    <option value="">No category</option>
+                    {documentCategories!.map((cat) => (
+                      <option key={cat.name} value={cat.name}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <Input
                 placeholder="https://example.com/article or Google Drive share link"
                 value={url}

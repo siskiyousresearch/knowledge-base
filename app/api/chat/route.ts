@@ -7,6 +7,7 @@ import { DEFAULT_MODEL_ID } from "@/lib/ai/models";
 import { ChatMessage, ChunkSearchResult } from "@/lib/types";
 import { checkBudget } from "@/lib/ai/usage";
 import { logUsage } from "@/lib/ai/usage";
+import { getTemplate } from "@/lib/templates";
 
 export async function POST(request: NextRequest) {
   const { messages, conversationId, projectId } = (await request.json()) as {
@@ -88,27 +89,30 @@ export async function POST(request: NextRequest) {
         .join("\n\n")
     : "No relevant documents found in the knowledge base.";
 
-  const systemMessage: ChatMessage = {
-    role: "system",
-    content: `You are a knowledge base assistant. You must ONLY answer using the provided context from the knowledge base documents below. Do NOT use any outside knowledge, training data, or general information.
-
-If the context contains relevant information, answer the question and cite which source(s) you're drawing from.
-If the context does NOT contain relevant information, respond with: "I don't have information about that in the knowledge base." Do not guess, speculate, or supplement with outside knowledge.
-
-## Context from Knowledge Base:
-${contextBlock}`,
-  };
-
-  // 5. Resolve model: project model > default
+  // 5. Resolve model and template from project
   let modelId = DEFAULT_MODEL_ID;
+  let templatePrompt = "";
   if (projectId) {
     const { data: proj } = await supabase
       .from("knowledge_projects")
-      .select("model_id")
+      .select("model_id, template")
       .eq("id", projectId)
       .single();
     if (proj?.model_id) modelId = proj.model_id;
+    if (proj?.template) {
+      const template = getTemplate(proj.template);
+      templatePrompt = template.systemPrompt;
+    }
   }
+
+  const basePrompt = templatePrompt
+    ? `${templatePrompt}\n\nYou must ONLY answer using the provided context from the knowledge base documents below. Do NOT use any outside knowledge, training data, or general information.\n\nIf the context contains relevant information, answer the question and cite which source(s) you're drawing from.\nIf the context does NOT contain relevant information, respond with: "I don't have information about that in the knowledge base." Do not guess, speculate, or supplement with outside knowledge.`
+    : `You are a knowledge base assistant. You must ONLY answer using the provided context from the knowledge base documents below. Do NOT use any outside knowledge, training data, or general information.\n\nIf the context contains relevant information, answer the question and cite which source(s) you're drawing from.\nIf the context does NOT contain relevant information, respond with: "I don't have information about that in the knowledge base." Do not guess, speculate, or supplement with outside knowledge.`;
+
+  const systemMessage: ChatMessage = {
+    role: "system",
+    content: `${basePrompt}\n\n## Context from Knowledge Base:\n${contextBlock}`,
+  };
 
   const fullMessages = [systemMessage, ...messages];
   const stream = await chatCompletionStream(fullMessages, { model: modelId });

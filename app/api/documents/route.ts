@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { fileName, fileType, fileSize, projectId } = await request.json();
+    const { fileName, fileType, fileSize, projectId, metadata: extraMetadata } = await request.json();
 
     if (!fileName || !fileType) {
       return NextResponse.json({ error: "fileName and fileType are required" }, { status: 400 });
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
         file_type: fileType,
         file_size: fileSize,
         project_id: projectId || null,
+        metadata: extraMetadata || {},
       })
       .select()
       .single();

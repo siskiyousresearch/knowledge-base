@@ -2,6 +2,7 @@ export interface Project {
   id: string;
   title: string;
   description: string | null;
+  template: string;
   model_id: string | null;
   share_id: string | null;
   is_shared: boolean;

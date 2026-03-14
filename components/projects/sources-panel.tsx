@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UploadDialog } from "@/components/documents/upload-dialog";
 import { Document, DocumentStatus, CrawlJob } from "@/lib/types";
+import { DocumentCategory } from "@/lib/templates";
 import { formatFileSize } from "@/lib/utils";
 import {
   Plus,
@@ -55,9 +56,10 @@ const statusVariants: Record<DocumentStatus, "pending" | "processing" | "complet
 interface SourcesPanelProps {
   projectId: string;
   onViewDocument?: (documentId: string) => void;
+  documentCategories?: DocumentCategory[];
 }
 
-export function SourcesPanel({ projectId, onViewDocument }: SourcesPanelProps) {
+export function SourcesPanel({ projectId, onViewDocument, documentCategories }: SourcesPanelProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -334,6 +336,11 @@ export function SourcesPanel({ projectId, onViewDocument }: SourcesPanelProps) {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{doc.title}</p>
                     <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      {(doc.metadata?.category as string) && (
+                        <span className="rounded-full bg-primary/10 px-1.5 py-0 text-primary font-medium">
+                          {doc.metadata.category as string}
+                        </span>
+                      )}
                       {doc.file_size && <span>{formatFileSize(doc.file_size)}</span>}
                       {doc.chunk_count > 0 && <span>{doc.chunk_count} chunks</span>}
                       {doc.error_message && (
@@ -367,6 +374,7 @@ export function SourcesPanel({ projectId, onViewDocument }: SourcesPanelProps) {
         onClose={() => setUploadOpen(false)}
         onComplete={handleUploadComplete}
         projectId={projectId}
+        documentCategories={documentCategories}
       />
     </div>
   );

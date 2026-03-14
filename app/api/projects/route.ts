@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getTemplate } from "@/lib/templates";
 
 export async function GET() {
   const supabase = createAdminClient();
@@ -35,22 +36,50 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { title, description } = await request.json();
+  const { title, description, template: templateId } = await request.json();
 
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
   }
 
+  const template = getTemplate(templateId || "general");
   const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("knowledge_projects")
-    .insert({ title: title.trim(), description: description?.trim() || null })
+    .insert({
+      title: title.trim(),
+      description: description?.trim() || null,
+      template: template.id,
+    })
     .select()
     .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Trigger auto-scrape crawls in the background if template has them
+  if (template.autoScrape.length > 0) {
+    const baseUrl = request.nextUrl.origin;
+
+    // Fire and forget — don't block the response
+    Promise.allSettled(
+      template.autoScrape.map((scrape) =>
+        fetch(`${baseUrl}/api/documents/crawl`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: scrape.url,
+            maxDepth: scrape.maxDepth,
+            maxPages: scrape.maxPages,
+            projectId: data.id,
+          }),
+        })
+      )
+    ).catch(() => {
+      // Swallow errors — crawls are best-effort
+    });
   }
 
   return NextResponse.json(data, { status: 201 });

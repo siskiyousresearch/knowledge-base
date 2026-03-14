@@ -2,11 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { FolderOpen, Settings, Database, Plus, LogOut } from "lucide-react";
+import { FolderOpen, Settings, Database, Plus, LogOut, Scale, Award } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Project } from "@/lib/types";
+import { getTemplate } from "@/lib/templates";
+
+const templateIcons: Record<string, typeof FolderOpen> = {
+  FolderOpen,
+  Scale,
+  Award,
+};
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -85,6 +92,8 @@ export function Sidebar() {
         <div className="flex-1 space-y-0.5 overflow-auto">
           {projects.map((project) => {
             const isActive = pathname === `/projects/${project.id}`;
+            const tmpl = getTemplate(project.template);
+            const Icon = templateIcons[tmpl.icon] || FolderOpen;
             return (
               <Link
                 key={project.id}
@@ -96,7 +105,7 @@ export function Sidebar() {
                     : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 )}
               >
-                <FolderOpen className="h-4 w-4 shrink-0" />
+                <Icon className="h-4 w-4 shrink-0" />
                 <span className="truncate">{project.title}</span>
               </Link>
             );

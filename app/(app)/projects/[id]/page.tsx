@@ -13,6 +13,7 @@ import { SourceViewer } from "@/components/projects/source-viewer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { AVAILABLE_MODELS } from "@/lib/ai/models";
+import { getTemplate } from "@/lib/templates";
 import {
   ArrowLeft,
   Pencil,
@@ -25,8 +26,17 @@ import {
   FileText,
   BookOpen,
   Monitor,
+  FolderOpen,
+  Scale,
+  Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const templateIcons: Record<string, typeof FolderOpen> = {
+  FolderOpen,
+  Scale,
+  Award,
+};
 
 type Tab = "chat" | "notes" | "artifacts";
 
@@ -166,6 +176,16 @@ export default function ProjectDetailPage() {
           </div>
         ) : (
           <div className="flex items-center gap-2">
+            {(() => {
+              const tmpl = getTemplate(project.template);
+              const TmplIcon = templateIcons[tmpl.icon] || FolderOpen;
+              return tmpl.id !== "general" ? (
+                <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                  <TmplIcon className="h-3 w-3" />
+                  {tmpl.name}
+                </span>
+              ) : null;
+            })()}
             <h2 className="text-sm font-semibold">{project.title}</h2>
             <button
               onClick={() => { setEditTitle(project.title); setEditing(true); }}
@@ -210,7 +230,7 @@ export default function ProjectDetailPage() {
       <div ref={containerRef} className="flex flex-1 overflow-hidden">
         {/* Left: Sources */}
         <div style={{ width: sidebarWidth, minWidth: 200 }} className="border-r border-border overflow-hidden shrink-0">
-          <SourcesPanel projectId={id} onViewDocument={setViewingDocId} />
+          <SourcesPanel projectId={id} onViewDocument={setViewingDocId} documentCategories={getTemplate(project.template).documentCategories} />
         </div>
 
         {/* Drag handle */}
