@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseUrl } from "@/lib/documents/parsers/url";
+import { parseDocument, isSupportedExtension } from "@/lib/documents";
 import { chunkText, estimateTokenCount } from "@/lib/documents/chunker";
 import { generateEmbedding } from "@/lib/ai/embeddings";
+
+const FILE_EXTENSION_REGEX = /\.(pdf|docx|doc|xlsx|xls|csv|pptx|txt|md|png|jpg|jpeg|gif|webp)$/i;
 
 const NON_PARSEABLE_CONTENT_TYPES = [
   "application/zip",
@@ -147,22 +150,66 @@ export async function POST(request: NextRequest) {
     );
 
     await Promise.race([processingTimeout, (async () => {
-    // For Google Drive, convert share link to export URL
-    let fetchUrl = targetUrl;
-    if (isGoogleDrive) {
-      const match = targetUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-      if (match) {
-        fetchUrl = `https://docs.google.com/document/d/${match[1]}/export?format=txt`;
-      }
-    }
+    // Check if the URL points to a downloadable file (PDF, DOCX, etc.)
+    const urlPath = new URL(targetUrl).pathname;
+    const fileExtMatch = urlPath.match(FILE_EXTENSION_REGEX);
+    const isFileUrl = fileExtMatch && isSupportedExtension(fileExtMatch[0]);
 
-    const { text, metadata, links } = await parseUrl(fetchUrl);
+    let text = "";
+    let metadata: Record<string, unknown> = { url: targetUrl };
+    let links: string[] = [];
+    let title = "";
+
+    if (isFileUrl && !isGoogleDrive) {
+      // Download the file and parse it with the appropriate document parser
+      const controller = new AbortController();
+      const fetchTimeout = setTimeout(() => controller.abort(), 30000);
+      let response: Response;
+      try {
+        response = await fetch(targetUrl, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; KnowledgeBaseBot/1.0)" },
+          signal: controller.signal,
+        });
+      } catch (err) {
+        clearTimeout(fetchTimeout);
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new Error(`Timed out downloading file after 30s: ${targetUrl}`);
+        }
+        throw err;
+      }
+      clearTimeout(fetchTimeout);
+
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+      }
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const ext = fileExtMatch[0].toLowerCase();
+      const result = await parseDocument(buffer, ext);
+      text = result.text;
+      metadata = { ...result.metadata, url: targetUrl };
+      title = urlPath.split("/").pop()?.replace(/\.[^.]+$/, "") || targetUrl;
+    } else {
+      // HTML page — use URL parser
+      let fetchUrl = targetUrl;
+      if (isGoogleDrive) {
+        const match = targetUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (match) {
+          fetchUrl = `https://docs.google.com/document/d/${match[1]}/export?format=txt`;
+        }
+      }
+
+      const result = await parseUrl(fetchUrl);
+      text = result.text;
+      metadata = result.metadata;
+      links = result.links;
+      title = (result.metadata.title as string) || new URL(targetUrl).hostname;
+    }
 
     if (!text.trim()) {
       throw new Error("No text content could be extracted from the URL");
     }
 
-    const title = (metadata.title as string) || new URL(targetUrl).hostname;
     const chunks = chunkText(text);
 
     for (const chunk of chunks) {
