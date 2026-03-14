@@ -199,15 +199,19 @@ export default function ProjectDetailPage() {
 
         <div className="ml-auto flex items-center gap-2">
           {/* Template selector */}
-          <select
-            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-            value={project.template || "general"}
-            onChange={(e) => changeTemplate(e.target.value)}
-          >
-            {PROJECT_TEMPLATES.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground">Theme:</span>
+            <select
+              className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+              value={project.template || "general"}
+              onChange={(e) => changeTemplate(e.target.value)}
+              title={getTemplate(project.template || "general").description}
+            >
+              {PROJECT_TEMPLATES.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
 
           {/* Model selector */}
           {aiMode === "local" ? (
