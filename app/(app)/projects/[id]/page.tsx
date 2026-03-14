@@ -24,6 +24,7 @@ import {
   MessageSquare,
   FileText,
   BookOpen,
+  Monitor,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,8 @@ export default function ProjectDetailPage() {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [viewingDocId, setViewingDocId] = useState<string | null>(null);
+  const [aiMode, setAiMode] = useState<string>("cloud");
+  const [localModelName, setLocalModelName] = useState<string>("");
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -77,6 +80,18 @@ export default function ProjectDetailPage() {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const map = Object.fromEntries(data.map((s: { key: string; value: string }) => [s.key, s.value]));
+          setAiMode(map.ai_mode || "cloud");
+          setLocalModelName(map.local_ai_model || "");
+        }
+      });
+  }, []);
 
   async function saveTitle() {
     if (!editTitle.trim() || !project) return;
@@ -163,16 +178,23 @@ export default function ProjectDetailPage() {
 
         <div className="ml-auto flex items-center gap-2">
           {/* Model selector */}
-          <select
-            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
-            value={project.model_id || ""}
-            onChange={(e) => changeModel(e.target.value)}
-          >
-            <option value="">Default (DeepSeek V3)</option>
-            {AVAILABLE_MODELS.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </select>
+          {aiMode === "local" ? (
+            <span className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
+              <Monitor className="h-3 w-3" />
+              {localModelName || "Local AI"}
+            </span>
+          ) : (
+            <select
+              className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+              value={project.model_id || ""}
+              onChange={(e) => changeModel(e.target.value)}
+            >
+              <option value="">Default (DeepSeek V3)</option>
+              {AVAILABLE_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          )}
 
           <Button size="sm" variant="outline" onClick={() => setGenerateOpen(true)}>
             <Sparkles className="h-3.5 w-3.5" />

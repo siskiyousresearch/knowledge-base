@@ -5,6 +5,9 @@ const CACHE_TTL = 60_000; // 60 seconds
 
 const ENV_FALLBACKS: Record<string, string | undefined> = {
   openrouter_api_key: process.env.OPENROUTER_API_KEY,
+  ai_mode: process.env.AI_MODE || "cloud",
+  local_ai_url: process.env.LOCAL_AI_URL,
+  local_ai_model: process.env.LOCAL_AI_MODEL,
 };
 
 export async function getSetting(key: string): Promise<string | null> {

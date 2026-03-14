@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApiKeySection } from "@/components/settings/api-key-section";
+import { AiProviderSection } from "@/components/settings/ai-provider-section";
 import { UsageStatsSection } from "@/components/settings/usage-stats-section";
 import { BudgetSection } from "@/components/settings/budget-section";
 
@@ -47,6 +47,7 @@ export default function SettingsPage() {
   }, [fetchData]);
 
   const currentApiKey = settings.find((s) => s.key === "openrouter_api_key")?.value || "";
+  const settingsMap = Object.fromEntries(settings.map((s) => [s.key, s.value]));
 
   if (loading) {
     return (
@@ -60,7 +61,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <ApiKeySection currentKey={currentApiKey} onSaved={fetchData} />
+      <AiProviderSection currentKey={currentApiKey} settings={settingsMap} onSaved={fetchData} />
       <BudgetSection
         currentBudget={stats?.dailyBudget || null}
         todaySpend={stats?.todaySpend || 0}

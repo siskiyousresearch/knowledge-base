@@ -15,35 +15,70 @@ function splitText(text: string, separator: string): string[] {
   return text.split(separator).filter((s) => s.trim().length > 0);
 }
 
-function recursiveSplit(
+function iterativeSplit(
   text: string,
-  separatorIndex: number,
+  initialSeparatorIndex: number,
   chunkSize: number
 ): string[] {
-  if (text.length <= chunkSize) return [text];
+  const result: string[] = [];
+  const stack: { text: string; separatorIndex: number }[] = [
+    { text, separatorIndex: initialSeparatorIndex },
+  ];
 
-  const separator = SEPARATORS[separatorIndex];
-  if (!separator) return [text]; // last resort: return as-is
+  while (stack.length > 0) {
+    const item = stack.pop()!;
 
-  const parts = splitText(text, separator);
-  const chunks: string[] = [];
-  let current = "";
+    if (item.text.length <= chunkSize) {
+      result.push(item.text);
+      continue;
+    }
 
-  for (const part of parts) {
-    const candidate = current ? current + separator + part : part;
-    if (candidate.length > chunkSize && current) {
-      chunks.push(current);
-      current = part;
-    } else if (candidate.length > chunkSize && !current) {
-      // Single part too large — try next separator
-      chunks.push(...recursiveSplit(part, separatorIndex + 1, chunkSize));
-    } else {
-      current = candidate;
+    // All separators exhausted — force-split at chunkSize boundaries
+    if (item.separatorIndex >= SEPARATORS.length) {
+      for (let i = 0; i < item.text.length; i += chunkSize) {
+        result.push(item.text.slice(i, i + chunkSize));
+      }
+      continue;
+    }
+
+    const separator = SEPARATORS[item.separatorIndex];
+    const parts = splitText(item.text, separator);
+    const merged: { text: string; separatorIndex: number }[] = [];
+    let current = "";
+
+    for (const part of parts) {
+      const candidate = current ? current + separator + part : part;
+      if (candidate.length > chunkSize && current) {
+        // current fits — emit it directly if small enough, otherwise queue it
+        if (current.length <= chunkSize) {
+          result.push(current);
+        } else {
+          merged.push({ text: current, separatorIndex: item.separatorIndex + 1 });
+        }
+        current = part;
+      } else if (candidate.length > chunkSize && !current) {
+        // Single part too large — try next separator
+        merged.push({ text: part, separatorIndex: item.separatorIndex + 1 });
+      } else {
+        current = candidate;
+      }
+    }
+
+    if (current) {
+      if (current.length <= chunkSize) {
+        result.push(current);
+      } else {
+        merged.push({ text: current, separatorIndex: item.separatorIndex + 1 });
+      }
+    }
+
+    // Push in reverse order so we process them left-to-right (stack is LIFO)
+    for (let i = merged.length - 1; i >= 0; i--) {
+      stack.push(merged[i]);
     }
   }
 
-  if (current) chunks.push(current);
-  return chunks;
+  return result;
 }
 
 export function chunkText(
@@ -51,7 +86,7 @@ export function chunkText(
   chunkSize: number = CHUNK_SIZE,
   overlap: number = CHUNK_OVERLAP
 ): Chunk[] {
-  const rawChunks = recursiveSplit(text.trim(), 0, chunkSize);
+  const rawChunks = iterativeSplit(text.trim(), 0, chunkSize);
   const chunks: Chunk[] = [];
 
   let charOffset = 0;
