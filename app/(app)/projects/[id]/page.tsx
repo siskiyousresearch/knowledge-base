@@ -13,7 +13,7 @@ import { SourceViewer } from "@/components/projects/source-viewer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { AVAILABLE_MODELS } from "@/lib/ai/models";
-import { getTemplate } from "@/lib/templates";
+import { getTemplate, PROJECT_TEMPLATES } from "@/lib/templates";
 import {
   ArrowLeft,
   Pencil,
@@ -126,6 +126,17 @@ export default function ProjectDetailPage() {
     setProject(updated);
   }
 
+  async function changeTemplate(templateId: string) {
+    if (!project) return;
+    const res = await fetch(`/api/projects/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ template: templateId }),
+    });
+    const updated = await res.json();
+    setProject(updated);
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -176,16 +187,6 @@ export default function ProjectDetailPage() {
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            {(() => {
-              const tmpl = getTemplate(project.template);
-              const TmplIcon = templateIcons[tmpl.icon] || FolderOpen;
-              return tmpl.id !== "general" ? (
-                <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                  <TmplIcon className="h-3 w-3" />
-                  {tmpl.name}
-                </span>
-              ) : null;
-            })()}
             <h2 className="text-sm font-semibold">{project.title}</h2>
             <button
               onClick={() => { setEditTitle(project.title); setEditing(true); }}
@@ -197,6 +198,17 @@ export default function ProjectDetailPage() {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          {/* Template selector */}
+          <select
+            className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+            value={project.template || "general"}
+            onChange={(e) => changeTemplate(e.target.value)}
+          >
+            {PROJECT_TEMPLATES.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+
           {/* Model selector */}
           {aiMode === "local" ? (
             <span className="flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground">
