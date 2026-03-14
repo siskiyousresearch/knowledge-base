@@ -20,6 +20,8 @@ import {
   Loader2,
   XCircle,
   RefreshCw,
+  Download,
+  AlertTriangle,
 } from "lucide-react";
 
 const fileTypeIcons: Record<string, typeof FileText> = {
@@ -88,7 +90,7 @@ export function SourcesPanel({ projectId, onViewDocument }: SourcesPanelProps) {
         const res = await fetch(`/api/documents/crawl/${id}`);
         if (res.ok) {
           const job = await res.json();
-          if (job.status === "running") {
+          if (job.status === "running" || (job.deleted_urls && job.deleted_urls.length > 0)) {
             jobs.push(job);
           }
         }
@@ -251,27 +253,51 @@ export function SourcesPanel({ projectId, onViewDocument }: SourcesPanelProps) {
         </div>
       )}
 
-      {/* Active crawl jobs */}
+      {/* Crawl jobs */}
       {crawlJobs.map((job) => (
         <div key={job.id} className="px-3 py-2 border-b border-border bg-blue-50 dark:bg-blue-950/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <Globe className="h-3 w-3 text-blue-600" />
-              <span className="text-xs font-medium text-blue-700 dark:text-blue-400">Crawling</span>
+              {job.status === "running" ? (
+                <>
+                  <Globe className="h-3 w-3 text-blue-600" />
+                  <span className="text-xs font-medium text-blue-700 dark:text-blue-400">Crawling</span>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-3 w-3 text-yellow-600" />
+                  <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">
+                    {job.deleted_urls?.length || 0} error{(job.deleted_urls?.length || 0) !== 1 ? "s" : ""} found
+                  </span>
+                </>
+              )}
             </div>
-            <button
-              onClick={() => cancelCrawl(job.id)}
-              className="text-[10px] text-muted-foreground hover:text-destructive"
-            >
-              Cancel
-            </button>
+            {job.status === "running" ? (
+              <button
+                onClick={() => cancelCrawl(job.id)}
+                className="text-[10px] text-muted-foreground hover:text-destructive"
+              >
+                Cancel
+              </button>
+            ) : job.deleted_urls && job.deleted_urls.length > 0 ? (
+              <a
+                href={`/api/documents/crawl/${job.id}/report`}
+                download
+                className="flex items-center gap-1 text-[10px] text-primary hover:underline"
+              >
+                <Download className="h-2.5 w-2.5" />
+                Error Report
+              </a>
+            ) : null}
           </div>
           <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{job.root_url}</p>
-          <p className="text-[10px] text-muted-foreground">
-            {job.pages_completed} / {job.pages_found} pages
-            {job.pages_failed > 0 && ` (${job.pages_failed} failed)`}
-            {" "}&middot; depth {job.max_depth >= 99 ? "unlimited" : job.max_depth}
-          </p>
+          {job.status === "running" && (
+            <p className="text-[10px] text-muted-foreground">
+              {job.pages_completed} / {job.pages_found} pages
+              {job.pages_failed > 0 && ` (${job.pages_failed} failed)`}
+              {" "}&middot; depth {job.max_depth >= 99 ? "unlimited" : job.max_depth}
+            </p>
+          )}
         </div>
       ))}
 

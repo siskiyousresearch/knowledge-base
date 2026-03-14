@@ -5,10 +5,10 @@ import { Dialog, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ALL_EXTENSIONS } from "@/lib/constants";
-import { Upload, Globe, Loader2, CheckCircle, XCircle, File } from "lucide-react";
+import { Upload, Globe, Loader2, CheckCircle, XCircle, File, List } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Tab = "file" | "url";
+type Tab = "file" | "url" | "bulk";
 
 interface FileUploadState {
   file: File;
@@ -37,6 +37,9 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
   const [urlError, setUrlError] = useState("");
   const [crawlDepth, setCrawlDepth] = useState(0);
   const [maxPages, setMaxPages] = useState(100);
+  const [bulkUrls, setBulkUrls] = useState("");
+  const [bulkState, setBulkState] = useState<"idle" | "processing" | "done" | "error">("idle");
+  const [bulkResult, setBulkResult] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -46,6 +49,9 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
     setUrl("");
     setUrlState("idle");
     setUrlError("");
+    setBulkUrls("");
+    setBulkState("idle");
+    setBulkResult("");
     setDragOver(false);
   }
 
@@ -211,6 +217,38 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
     }
   }
 
+  const parsedBulkUrls = bulkUrls
+    .split("\n")
+    .map((u) => u.trim())
+    .filter((u) => u && u.startsWith("http"));
+
+  async function handleBulkSubmit() {
+    if (parsedBulkUrls.length === 0) return;
+    setBulkState("processing");
+    setBulkResult("");
+
+    try {
+      const res = await fetch("/api/documents/bulk-urls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls: parsedBulkUrls, projectId }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Bulk URL submission failed");
+      }
+
+      const data = await res.json();
+      setBulkState("done");
+      setBulkResult(`${data.queued} URL${data.queued !== 1 ? "s" : ""} queued${data.skipped > 0 ? ` (${data.skipped} duplicates skipped)` : ""}. Processing will begin automatically.`);
+      setTimeout(onComplete, 2000);
+    } catch (err) {
+      setBulkState("error");
+      setBulkResult(err instanceof Error ? err.message : "Something went wrong");
+    }
+  }
+
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
@@ -255,10 +293,61 @@ export function UploadDialog({ open, onClose, onComplete, projectId }: UploadDia
           <Globe className="mr-1.5 inline-block h-4 w-4" />
           Add URL
         </button>
+        <button
+          className={cn(
+            "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            tab === "bulk" ? "bg-card shadow-sm" : "text-muted-foreground hover:text-foreground"
+          )}
+          onClick={() => setTab("bulk")}
+        >
+          <List className="mr-1.5 inline-block h-4 w-4" />
+          Bulk URLs
+        </button>
       </div>
 
       <div className="mt-4">
-        {tab === "file" ? (
+        {tab === "bulk" ? (
+          bulkState === "done" ? (
+            <div className="flex flex-col items-center py-8 text-center">
+              <CheckCircle className="mb-2 h-10 w-10 text-status-completed" />
+              <p className="font-medium">URLs queued!</p>
+              <p className="mt-1 text-sm text-muted-foreground">{bulkResult}</p>
+            </div>
+          ) : bulkState === "error" ? (
+            <div className="flex flex-col items-center py-8 text-center">
+              <XCircle className="mb-2 h-10 w-10 text-status-failed" />
+              <p className="mb-2 font-medium">Something went wrong</p>
+              <p className="mb-4 text-sm text-muted-foreground">{bulkResult}</p>
+              <Button variant="outline" onClick={() => setBulkState("idle")}>Try Again</Button>
+            </div>
+          ) : bulkState === "processing" ? (
+            <div className="flex flex-col items-center py-8 text-center">
+              <Loader2 className="mb-2 h-10 w-10 animate-spin text-primary" />
+              <p className="font-medium">Queueing URLs...</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <textarea
+                placeholder={"Paste URLs, one per line:\nhttps://example.com/page1\nhttps://example.com/page2\nhttps://example.com/page3"}
+                value={bulkUrls}
+                onChange={(e) => setBulkUrls(e.target.value)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                rows={8}
+              />
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {parsedBulkUrls.length > 0
+                    ? `${parsedBulkUrls.length} valid URL${parsedBulkUrls.length !== 1 ? "s" : ""} detected`
+                    : "Enter URLs starting with http:// or https://"}
+                </p>
+                <Button onClick={handleBulkSubmit} disabled={parsedBulkUrls.length === 0}>
+                  <List className="h-4 w-4" />
+                  Add {parsedBulkUrls.length > 0 ? parsedBulkUrls.length : ""} URL{parsedBulkUrls.length !== 1 ? "s" : ""}
+                </Button>
+              </div>
+            </div>
+          )
+        ) : tab === "file" ? (
           <div className="space-y-3">
             <div
               className={cn(

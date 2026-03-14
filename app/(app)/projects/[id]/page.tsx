@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Project } from "@/lib/types";
 import { SourcesPanel } from "@/components/projects/sources-panel";
@@ -40,6 +40,34 @@ export default function ProjectDetailPage() {
   const [generateOpen, setGenerateOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [viewingDocId, setViewingDocId] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const isDragging = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const newWidth = Math.min(Math.max(200, e.clientX - rect.left), rect.width - 300);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      isDragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, []);
 
   useEffect(() => {
     fetch(`/api/projects/${id}`)
@@ -157,11 +185,17 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Split view: Sources | Content */}
-      <div className="flex flex-1 overflow-hidden">
+      <div ref={containerRef} className="flex flex-1 overflow-hidden">
         {/* Left: Sources */}
-        <div className="w-80 border-r border-border overflow-hidden">
+        <div style={{ width: sidebarWidth, minWidth: 200 }} className="border-r border-border overflow-hidden shrink-0">
           <SourcesPanel projectId={id} onViewDocument={setViewingDocId} />
         </div>
+
+        {/* Drag handle */}
+        <div
+          className="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors shrink-0"
+          onMouseDown={handleMouseDown}
+        />
 
         {/* Right: Tabs */}
         <div className="flex-1 flex flex-col overflow-hidden">

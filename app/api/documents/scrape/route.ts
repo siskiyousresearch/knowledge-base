@@ -4,6 +4,80 @@ import { parseUrl } from "@/lib/documents/parsers/url";
 import { chunkText, estimateTokenCount } from "@/lib/documents/chunker";
 import { generateEmbedding } from "@/lib/ai/embeddings";
 
+const NON_PARSEABLE_CONTENT_TYPES = [
+  "application/zip",
+  "application/x-",
+  "audio/",
+  "video/",
+];
+
+interface ValidateResult {
+  valid: string[];
+  notFoundUrls: string[];
+}
+
+async function validateUrls(urls: string[]): Promise<ValidateResult> {
+  const valid: string[] = [];
+  const notFoundUrls: string[] = [];
+  const batchSize = 10;
+
+  for (let i = 0; i < urls.length; i += batchSize) {
+    const batch = urls.slice(i, i + batchSize);
+
+    const results = await Promise.allSettled(
+      batch.map(async (link) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
+        try {
+          const res = await fetch(link, {
+            method: "HEAD",
+            signal: controller.signal,
+            redirect: "follow",
+          });
+          clearTimeout(timeout);
+
+          if (res.status === 404) {
+            return { url: link, status: "not_found" as const };
+          }
+
+          if (!res.ok) {
+            return { url: link, status: "rejected" as const };
+          }
+
+          const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
+          const isNonParseable = NON_PARSEABLE_CONTENT_TYPES.some((t) =>
+            contentType.includes(t)
+          );
+
+          if (isNonParseable) {
+            return { url: link, status: "rejected" as const };
+          }
+
+          return { url: link, status: "ok" as const };
+        } catch {
+          clearTimeout(timeout);
+          // Network error or timeout — keep the URL, it might work with a full GET
+          return { url: link, status: "ok" as const };
+        }
+      })
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        if (result.value.status === "ok") {
+          valid.push(result.value.url);
+        } else if (result.value.status === "not_found") {
+          notFoundUrls.push(result.value.url);
+        }
+        // "rejected" urls are silently dropped
+      }
+    }
+  }
+
+  return { valid, notFoundUrls };
+}
+
 export async function POST(request: NextRequest) {
   const { url, documentId, crawlJobId, crawlDepth = 0, projectId } = await request.json();
 
@@ -132,9 +206,29 @@ export async function POST(request: NextRequest) {
 
           const existingUrls = new Set(existingDocs?.map((d) => d.file_name) || []);
 
-          const newLinks = links
+          const candidateLinks = links
             .filter((link) => !existingUrls.has(link))
             .slice(0, remaining);
+
+          // HEAD validation before inserting child URLs
+          const { valid: newLinks, notFoundUrls } = await validateUrls(candidateLinks);
+
+          // Log 404 URLs to the crawl job's deleted_urls column
+          if (notFoundUrls.length > 0) {
+            const { data: currentJob } = await supabase
+              .from("knowledge_crawl_jobs")
+              .select("deleted_urls")
+              .eq("id", jobId)
+              .single();
+
+            const existingDeleted = (currentJob?.deleted_urls as Array<{ url: string; reason: string }>) || [];
+            const newDeleted = notFoundUrls.map((u) => ({ url: u, reason: "HEAD returned 404" }));
+
+            await supabase
+              .from("knowledge_crawl_jobs")
+              .update({ deleted_urls: [...existingDeleted, ...newDeleted] })
+              .eq("id", jobId);
+          }
 
           if (newLinks.length > 0) {
             const newDocs = newLinks.map((link) => ({
@@ -197,25 +291,49 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, documentId: doc.id, chunks: chunks.length });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Scraping failed";
-    await supabase
-      .from("knowledge_documents")
-      .update({ status: "failed", error_message: message })
-      .eq("id", doc.id);
-
-    // Update crawl job failed counter if applicable
+    const is404 = message.includes("404");
     const jobId = doc.crawl_job_id || crawlJobId;
+
     if (jobId) {
-      const { data: job } = await supabase
+      // Log error to crawl job's deleted_urls for the report
+      const { data: currentJob } = await supabase
         .from("knowledge_crawl_jobs")
-        .select("pages_failed")
+        .select("deleted_urls, pages_failed")
         .eq("id", jobId)
         .single();
-      if (job) {
+
+      if (currentJob) {
+        const existingDeleted = (currentJob.deleted_urls as Array<{ url: string; reason: string }>) || [];
+        const updatedDeleted = [...existingDeleted, { url: targetUrl, reason: message }];
+
         await supabase
           .from("knowledge_crawl_jobs")
-          .update({ pages_failed: job.pages_failed + 1 })
+          .update({
+            deleted_urls: updatedDeleted,
+            pages_failed: currentJob.pages_failed + 1,
+          })
           .eq("id", jobId);
       }
+
+      if (is404) {
+        // Auto-delete 404 documents to keep sources list clean
+        await supabase
+          .from("knowledge_documents")
+          .delete()
+          .eq("id", doc.id);
+      } else {
+        // Non-404: keep as failed so user can investigate
+        await supabase
+          .from("knowledge_documents")
+          .update({ status: "failed", error_message: message })
+          .eq("id", doc.id);
+      }
+    } else {
+      // Not part of a crawl — mark as failed with error message
+      await supabase
+        .from("knowledge_documents")
+        .update({ status: "failed", error_message: message })
+        .eq("id", doc.id);
     }
 
     return NextResponse.json({ error: message }, { status: 500 });

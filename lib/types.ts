@@ -80,6 +80,7 @@ export interface CrawlJob {
   pages_completed: number;
   pages_failed: number;
   status: CrawlStatus;
+  deleted_urls: Array<{ url: string; reason: string }>;
   created_at: string;
   updated_at: string;
 }

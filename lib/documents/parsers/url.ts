@@ -1,5 +1,16 @@
 import * as cheerio from "cheerio";
 
+const BLOCKED_EXTENSIONS = new Set([
+  ".zip", ".exe", ".dmg", ".mp3", ".mp4", ".avi", ".mov", ".wav",
+  ".tar", ".gz", ".rar", ".7z", ".iso", ".pkg", ".deb", ".rpm",
+  ".msi", ".apk",
+]);
+
+const BLOCKED_PATH_SEGMENTS = [
+  "/login", "/logout", "/wp-admin", "/cart", "/search",
+  "/signin", "/signup", "/register",
+];
+
 export interface UrlParseResult {
   text: string;
   metadata: Record<string, unknown>;
@@ -39,6 +50,17 @@ export async function parseUrl(url: string): Promise<UrlParseResult> {
         // Normalize: remove trailing slash, remove query params for dedup
         const clean = resolved.origin + resolved.pathname.replace(/\/$/, "");
         if (clean !== baseUrl.origin + baseUrl.pathname.replace(/\/$/, "")) {
+          // Skip non-content file extensions
+          const ext = resolved.pathname.match(/\.\w+$/)?.[0]?.toLowerCase();
+          if (ext && BLOCKED_EXTENSIONS.has(ext)) return;
+
+          // Skip common non-content paths
+          const lowerPath = resolved.pathname.toLowerCase();
+          if (BLOCKED_PATH_SEGMENTS.some((seg) => lowerPath.includes(seg))) return;
+
+          // Skip URLs with more than 3 query parameters (likely dynamic app pages)
+          if (resolved.searchParams.size > 3) return;
+
           linkSet.add(clean);
         }
       }

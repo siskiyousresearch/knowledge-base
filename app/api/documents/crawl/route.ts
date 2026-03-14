@@ -2,6 +2,83 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseUrl } from "@/lib/documents/parsers/url";
 
+const NON_PARSEABLE_CONTENT_TYPES = [
+  "application/zip",
+  "application/x-",
+  "audio/",
+  "video/",
+];
+
+interface ValidateResult {
+  valid: string[];
+  notFoundUrls: string[];
+}
+
+async function validateUrls(urls: string[]): Promise<ValidateResult> {
+  const valid: string[] = [];
+  const notFoundUrls: string[] = [];
+  const batchSize = 10;
+
+  for (let i = 0; i < urls.length; i += batchSize) {
+    const batch = urls.slice(i, i + batchSize);
+
+    const results = await Promise.allSettled(
+      batch.map(async (link) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+
+        try {
+          const res = await fetch(link, {
+            method: "HEAD",
+            signal: controller.signal,
+            redirect: "follow",
+          });
+          clearTimeout(timeout);
+
+          if (res.status === 404) {
+            return { url: link, status: "not_found" as const };
+          }
+
+          if (!res.ok) {
+            return { url: link, status: "rejected" as const };
+          }
+
+          const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
+          const isNonParseable = NON_PARSEABLE_CONTENT_TYPES.some((t) =>
+            contentType.includes(t)
+          );
+
+          if (isNonParseable) {
+            return { url: link, status: "rejected" as const };
+          }
+
+          return { url: link, status: "ok" as const };
+        } catch {
+          clearTimeout(timeout);
+          // Network error or timeout — keep the URL, it might work with a full GET
+          return { url: link, status: "ok" as const };
+        }
+      })
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        if (result.value.status === "ok") {
+          valid.push(result.value.url);
+        } else if (result.value.status === "not_found") {
+          notFoundUrls.push(result.value.url);
+        }
+        // "rejected" urls are silently dropped
+      } else {
+        // Promise itself rejected (shouldn't happen with try/catch, but keep URL to be safe)
+        // No URL reference available here, so this branch is effectively unreachable
+      }
+    }
+  }
+
+  return { valid, notFoundUrls };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { url, maxDepth = 1, maxPages = 50, projectId } = await request.json();
@@ -76,9 +153,20 @@ export async function POST(request: NextRequest) {
       metadata: { url, storagePath: null },
     });
 
-    // Discovered links (depth 1)
+    // Discovered links (depth 1) — validate with HEAD requests before inserting
     const linksToAdd = rootLinks.slice(0, clampedPages - 1);
-    for (const link of linksToAdd) {
+    const { valid: validLinks, notFoundUrls } = await validateUrls(linksToAdd);
+
+    // Log 404 URLs to the crawl job's deleted_urls column
+    if (notFoundUrls.length > 0) {
+      const deletedEntries = notFoundUrls.map((u) => ({ url: u, reason: "HEAD returned 404" }));
+      await supabase
+        .from("knowledge_crawl_jobs")
+        .update({ deleted_urls: deletedEntries })
+        .eq("id", job.id);
+    }
+
+    for (const link of validLinks) {
       docsToInsert.push({
         title: link,
         source: "url",
