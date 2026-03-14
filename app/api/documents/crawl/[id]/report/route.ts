@@ -18,14 +18,14 @@ export async function GET(
     return NextResponse.json({ error: "Crawl job not found" }, { status: 404 });
   }
 
-  const errors = (job.deleted_urls || []) as Array<{ url: string; reason: string }>;
+  const errors = (job.deleted_urls || []) as Array<{ url: string; reason: string; found_on?: string }>;
 
   if (errors.length === 0) {
     return NextResponse.json({ error: "No errors recorded for this crawl" }, { status: 404 });
   }
 
   // Categorize errors
-  const categories: Record<string, Array<{ url: string; reason: string }>> = {};
+  const categories: Record<string, Array<{ url: string; reason: string; found_on?: string }>> = {};
   for (const entry of errors) {
     let category = "Other";
     if (entry.reason.includes("404")) {
@@ -68,12 +68,15 @@ export async function GET(
   for (const [category, entries] of Object.entries(categories)) {
     lines.push(`${category} (${entries.length})`, "-".repeat(category.length + String(entries.length).length + 3));
     for (const entry of entries) {
-      lines.push(`  ${entry.url}`);
-      if (!entry.reason.includes(category.split(" ")[0])) {
-        lines.push(`    Error: ${entry.reason}`);
+      lines.push(`  Broken URL:  ${entry.url}`);
+      if (entry.found_on) {
+        lines.push(`  Found on:    ${entry.found_on}`);
       }
+      if (!entry.reason.includes(category.split(" ")[0])) {
+        lines.push(`  Error:       ${entry.reason}`);
+      }
+      lines.push("");
     }
-    lines.push("");
   }
 
   lines.push(`--- End of Report ---`);

@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
 
     // Log 404 URLs to the crawl job's deleted_urls column
     if (notFoundUrls.length > 0) {
-      const deletedEntries = notFoundUrls.map((u) => ({ url: u, reason: "HEAD returned 404" }));
+      const deletedEntries = notFoundUrls.map((u) => ({ url: u, reason: "HEAD returned 404", found_on: url }));
       await supabase
         .from("knowledge_crawl_jobs")
         .update({ deleted_urls: deletedEntries })

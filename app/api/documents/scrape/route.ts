@@ -221,8 +221,8 @@ export async function POST(request: NextRequest) {
               .eq("id", jobId)
               .single();
 
-            const existingDeleted = (currentJob?.deleted_urls as Array<{ url: string; reason: string }>) || [];
-            const newDeleted = notFoundUrls.map((u) => ({ url: u, reason: "HEAD returned 404" }));
+            const existingDeleted = (currentJob?.deleted_urls as Array<{ url: string; reason: string; found_on?: string }>) || [];
+            const newDeleted = notFoundUrls.map((u) => ({ url: u, reason: "HEAD returned 404", found_on: targetUrl }));
 
             await supabase
               .from("knowledge_crawl_jobs")
@@ -303,8 +303,8 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (currentJob) {
-        const existingDeleted = (currentJob.deleted_urls as Array<{ url: string; reason: string }>) || [];
-        const updatedDeleted = [...existingDeleted, { url: targetUrl, reason: message }];
+        const existingDeleted = (currentJob.deleted_urls as Array<{ url: string; reason: string; found_on?: string }>) || [];
+        const updatedDeleted = [...existingDeleted, { url: targetUrl, reason: message, found_on: "crawl discovery" }];
 
         await supabase
           .from("knowledge_crawl_jobs")
