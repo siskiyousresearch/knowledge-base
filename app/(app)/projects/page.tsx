@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,12 +18,27 @@ const templateIcons: Record<string, typeof FolderOpen> = {
 };
 
 export default function ProjectsPage() {
+  return (
+    <Suspense>
+      <ProjectsContent />
+    </Suspense>
+  );
+}
+
+function ProjectsContent() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("create") === "true") {
+      setCreating(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     fetch("/api/projects")

@@ -19,8 +19,6 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [creating, setCreating] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
 
   useEffect(() => {
     fetch("/api/projects")
@@ -29,19 +27,6 @@ export function Sidebar() {
         if (Array.isArray(data)) setProjects(data);
       });
   }, [pathname]);
-
-  async function createProject() {
-    if (!newTitle.trim()) return;
-    const res = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: newTitle.trim() }),
-    });
-    const project = await res.json();
-    setNewTitle("");
-    setCreating(false);
-    router.push(`/projects/${project.id}`);
-  }
 
   return (
     <aside className="flex h-full w-60 flex-col border-r border-border bg-card">
@@ -63,30 +48,12 @@ export function Sidebar() {
             Projects
           </Link>
           <button
-            onClick={() => setCreating(!creating)}
+            onClick={() => router.push("/projects?create=true")}
             className="text-muted-foreground hover:text-foreground"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
         </div>
-
-        {creating && (
-          <div className="mb-2">
-            <input
-              autoFocus
-              type="text"
-              placeholder="Project name..."
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") createProject();
-                if (e.key === "Escape") { setCreating(false); setNewTitle(""); }
-              }}
-              onBlur={() => { if (!newTitle.trim()) { setCreating(false); setNewTitle(""); } }}
-              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-          </div>
-        )}
 
         {/* Project list */}
         <div className="flex-1 space-y-0.5 overflow-auto">
