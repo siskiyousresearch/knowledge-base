@@ -132,6 +132,16 @@ export function SourcesPanel({ projectId, onViewDocument, documentCategories }: 
 
     if (pendingDocs.length === 0) return;
 
+    async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 120000) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { ...options, signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
     async function processNext() {
       const doc = pendingDocs[0];
       if (!doc || processingRef.current.has(doc.id)) return;
@@ -141,7 +151,7 @@ export function SourcesPanel({ projectId, onViewDocument, documentCategories }: 
       try {
         if (doc.source === "url") {
           const url = (doc.metadata?.url as string) || doc.file_name;
-          await fetch("/api/documents/scrape", {
+          await fetchWithTimeout("/api/documents/scrape", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -155,7 +165,7 @@ export function SourcesPanel({ projectId, onViewDocument, documentCategories }: 
         } else {
           const storagePath = (doc.metadata?.storagePath as string | undefined)
             || `uploads/${doc.id}/${doc.file_name}`;
-          await fetch("/api/documents/process", {
+          await fetchWithTimeout("/api/documents/process", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ documentId: doc.id, storagePath }),

@@ -18,11 +18,25 @@ export interface UrlParseResult {
 }
 
 export async function parseUrl(url: string): Promise<UrlParseResult> {
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; KnowledgeBaseBot/1.0)",
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; KnowledgeBaseBot/1.0)",
+      },
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Timed out fetching URL after 30s: ${url}`);
+    }
+    throw err;
+  }
+  clearTimeout(timeout);
 
   if (!response.ok) {
     throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`);
