@@ -141,6 +141,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Wrap the entire processing in a timeout to prevent infinite hangs
+    const processingTimeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Processing timed out after 90s for ${targetUrl}`)), 90000)
+    );
+
+    await Promise.race([processingTimeout, (async () => {
     // For Google Drive, convert share link to export URL
     let fetchUrl = targetUrl;
     if (isGoogleDrive) {
@@ -288,7 +294,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, documentId: doc.id, chunks: chunks.length });
+    })()]);
+
+    return NextResponse.json({ success: true, documentId: doc.id });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Scraping failed";
     const is404 = message.includes("404");
