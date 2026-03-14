@@ -81,14 +81,14 @@ async function validateUrls(urls: string[]): Promise<ValidateResult> {
 
 export async function POST(request: NextRequest) {
   try {
-    const { url, maxDepth = 1, maxPages = 50, projectId } = await request.json();
+    const { url, maxDepth = 1, maxPages, projectId } = await request.json();
 
     if (!url) {
       return NextResponse.json({ error: "url required" }, { status: 400 });
     }
 
     const clampedDepth = Math.min(Math.max(1, maxDepth), 99);
-    const clampedPages = Math.min(Math.max(1, maxPages), 5000);
+    const clampedPages = maxPages ? Math.max(1, maxPages) : 999999;
 
     const supabase = createAdminClient();
 

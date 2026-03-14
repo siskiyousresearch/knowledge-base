@@ -6,7 +6,7 @@ export interface DocumentCategory {
 export interface AutoScrapeConfig {
   url: string;
   maxDepth: number;
-  maxPages: number;
+  maxPages?: number; // omit for unlimited
 }
 
 export interface ProjectTemplate {
@@ -48,17 +48,14 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
       {
         url: "https://www.cccco.edu/About-Us/Chancellors-Office/Divisions/General-Counsel/Legal-Opinions",
         maxDepth: 2,
-        maxPages: 100,
       },
       {
         url: "https://www.cccco.edu/About-Us/Chancellors-Office/Divisions/General-Counsel/Legal-Advisories",
         maxDepth: 2,
-        maxPages: 100,
       },
       {
         url: "https://govt.westlaw.com/calregs/Browse/Home/California/CaliforniaCodeofRegulations?guid=I666C0070D48411DEBC02831C6D6C108E",
         maxDepth: 1,
-        maxPages: 50,
       },
     ],
   },
@@ -81,17 +78,14 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
       {
         url: "https://accjc.org/eligibility-requirements-standards-policies/",
         maxDepth: 2,
-        maxPages: 200,
       },
       {
         url: "https://accjc.org/policies/",
         maxDepth: 2,
-        maxPages: 200,
       },
       {
         url: "https://accjc.org/resources/",
         maxDepth: 2,
-        maxPages: 200,
       },
     ],
   },

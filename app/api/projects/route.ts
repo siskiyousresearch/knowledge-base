@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
           body: JSON.stringify({
             url: scrape.url,
             maxDepth: scrape.maxDepth,
-            maxPages: scrape.maxPages,
+            ...(scrape.maxPages ? { maxPages: scrape.maxPages } : {}),
             projectId: data.id,
           }),
         })

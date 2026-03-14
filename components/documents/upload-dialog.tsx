@@ -531,9 +531,8 @@ export function UploadDialog({ open, onClose, onComplete, projectId, documentCat
                   <Input
                     type="number"
                     min={1}
-                    max={5000}
                     value={maxPages}
-                    onChange={(e) => setMaxPages(Math.min(5000, Math.max(1, Number(e.target.value))))}
+                    onChange={(e) => setMaxPages(Math.max(1, Number(e.target.value)))}
                     className="flex-1"
                   />
                   {maxPages > 500 && (
